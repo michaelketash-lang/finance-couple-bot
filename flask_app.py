@@ -107,36 +107,6 @@ def handle_button_click(call):
         print(f"Error in callback: {e}")
         bot.answer_callback_query(call.id, "Error processing selection.")
 
-# 3. The Telegram Route (The Listening Ear)
-@app.route('/telegram', methods=['POST'])
-def telegram_input():
-    """
-    Matches the webhook URL we will give to Telegram.
-    Catches everything typed in the bot's chat.
-    """
-    data = request.json
-    # CRITICAL: We must reply with a 200 OK immediately.
-    # If we don't, Telegram assumes the server is dead and will retry sending the message 50 times.
-    return jsonify({"status": "ok"}), 200
-
-
-@bot.message_handler(commands=['add'])
-def handle_manual_add(message):
-    """
-    Fires when you type: /add 50 Aroma
-    """
-    # 1. Extract the text after the command
-    content = message.text.replace('/add', '').strip()
-
-    if not content:
-        bot.reply_to(message,
-                     "❌ Please provide details. Example: /add 50 Aroma")
-        return
-
-    # 2. Create buttons using the EXACT SAME 'Pipe' format: action|merchant|amount
-    # We put 'Manual' in the amount slot so the handler knows how to display it.
-    markup = types.InlineKeyboardMarkup(row_width=2)
-
 # 3. The Telegram Route
 @bot.message_handler(commands=['add'])
 def handle_manual_add(message):
