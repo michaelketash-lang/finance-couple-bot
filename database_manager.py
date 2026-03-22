@@ -40,4 +40,27 @@ def add_expense(merchant, amount, payer, split, category):
         print(f"❌ Database Error: {e}")
     return False
 
+def get_shared_monthly_totals(year, month):
+    """
+    Fetches the total shared expenses for a given month, grouped by payer.
+    Returns a list of tuples: [('Michael', 500.0), ('Ori', 300.0)]
+    """
+    try:
+        with sqlite3.connect('expenses.db') as conn:
+            cursor = conn.cursor()
+            month_filter = f"{year:04d}-{month:02d}%"
+
+            sql = '''
+                SELECT payer, SUM(amount) 
+                FROM expenses 
+                WHERE split = 'shared' AND created_at LIKE ?
+                GROUP BY payer
+            '''
+
+            cursor.execute(sql, (month_filter,))
+            return cursor.fetchall()
+
+    except sqlite3.Error as e:
+        print(f"❌ Database Error in get_shared_monthly_totals: {e}")
+        return []
 
