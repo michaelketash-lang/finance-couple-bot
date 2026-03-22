@@ -32,14 +32,16 @@ class ExpenseAIParser:
         self.client = OpenAI(api_key=self.api_key)
 
     def _get_system_prompt(self) -> str:
-        """Private method to keep the complex prompt logic isolated."""
         categories_str = ", ".join(self.SUPPORTED_CATEGORIES)
         return (
-            f"You are a financial data expert."
-            f" Extract data from raw text or merchant names. "
-            f"Allowed Categories: [{categories_str}]. "
-            f"Rules: Normalize merchant names (remove branch/city/numbers), "
-            f"translate to English, and return ONLY a valid JSON object."
+            f"You are a financial assistant for an Israeli user. "
+            f"Analyze transaction text and return a JSON object with: "
+            f"'merchant' (Clean English name, e.g., 'Aroma Espresso Bar' instead of 'AROMA TEL AVIV'), "
+            f"'amount' (Number, default 0.0 if not found), "
+            f"'category' (One of: {categories_str}), "
+            f"'currency' (Default 'ILS'). "
+            f"If the input is just a merchant name, extract category and clean the name. "
+            f"If the input includes a number, treat it as the amount."
         )
 
     def _fetch_completion(self, user_input: str) -> Optional[str]:
