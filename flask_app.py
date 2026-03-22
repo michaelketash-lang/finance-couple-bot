@@ -4,6 +4,7 @@ from flask import Flask, request, jsonify
 from telebot import types
 from dotenv import load_dotenv
 from ai_parser import parser_service
+from database_manager import add_expense
 
 # Load environment variables from .env file
 load_dotenv()
@@ -107,20 +108,38 @@ def handle_manual_add(message):
 @bot.callback_query_handler(func=lambda call: True)
 def handle_button_click(call):
     try:
-        # Unpack the 4 parameters from the callback string
+        # 1. Unpack the parameters from the callback string
         parts = call.data.split('|')
         action, merchant, amount, category = parts[0], parts[1], parts[2], parts[3]
 
-        result_label = "Shared 🏠" if action == "shrd" else "Personal 👤"
+        # 2. Map actions to your database 'CHECK' constraints
+        # Your DB expects 'shared' or 'personal'
+        db_split = "shared" if action == "shrd" else "personal"
 
-        final_text = (
-            f"✅ *Transaction Finalized*\n\n"
-            f"🏪 *Store:* {merchant}\n"
-            f"💰 *Amount:* ₪{amount}\n"
-            f"📂 *Category:* {category}\n"
-            f"📍 *Decision:* {result_label}\n"
-            f"_(Ready to be saved to DB)_"
+        # 3. Get the Payer (The user who clicked the button)
+        payer = call.from_user.first_name
+
+        # 4. Attempt to save to the database
+        success = add_expense(
+            merchant=merchant,
+            amount=float(amount),
+            payer=payer,
+            split=db_split,
+            category=category
         )
+
+        # 5. Update UI based on success or failure
+        if success:
+            result_label = "Shared 🏠" if db_split == "shared" else "Personal 👤"
+            final_text = (
+                f"✅ *Transaction Saved*\n\n"
+                f"🏪 *Store:* {merchant}\n"
+                f"💰 *Amount:* ₪{amount}\n"
+                f"📂 *Category:* {category}\n"
+                f"📍 *Decision:* {result_label}"
+            )
+        else:
+            final_text = "❌ *Database Error*\nCould not save to expenses.db."
 
         bot.edit_message_text(
             chat_id=call.message.chat.id,
@@ -133,7 +152,6 @@ def handle_button_click(call):
     except Exception as e:
         print(f"Error: {e}")
         bot.answer_callback_query(call.id, "Error processing selection.")
-
 
 if __name__ == '__main__':
     app.run(port=8000, debug=True)
