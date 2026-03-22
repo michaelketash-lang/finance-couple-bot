@@ -38,7 +38,7 @@ def send_transaction_ui(chat_id, merchant, amount, category, payer):
     message_text = (
         f"💳 *New Transaction Detected*\n\n"
         f"🏪 *Store:* `{merchant}`\n"
-        f"💰 *Amount:* `₪{amount}`\n"
+        f"💰 *Amount:* `{amount}`\n"
         f"📂 *Category:* `{category}`\n"
         f"👤 *Payer:* `{payer}`\n\n"
         f"Should we split this expense?"
@@ -134,7 +134,7 @@ def handle_button_click(call):
             final_text = (
                 f"✅ *Transaction Saved*\n\n"
                 f"🏪 *Store:* {merchant}\n"
-                f"💰 *Amount:* ₪{amount}\n"
+                f"💰 *Amount: ₪* {amount}\n"
                 f"📂 *Category:* {category}\n"
                 f"📍 *Decision:* {result_label}"
             )
