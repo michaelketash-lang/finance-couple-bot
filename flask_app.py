@@ -4,79 +4,109 @@ from flask import Flask, request, jsonify
 from telebot import types
 from dotenv import load_dotenv
 
-# Note: We are NOT importing database.py or ai_parser.py yet for this test
+# --- 1. SETUP & CONFIGURATION ---
+# Load environment variables from .env file
 load_dotenv()
 
-# Configuration
+# Get credentials from environment
 TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
 MY_CHAT_ID = os.getenv('MY_CHAT_ID')
 
-bot = telebot.TeleBot(TELEGRAM_TOKEN, threaded=False)
+# Initialize Bot and Flask app
+bot = telebot.TeleBot(TELEGRAM_TOKEN)
 app = Flask(__name__)
 
 
+# --- 2. WEBHOOK ROUTE (RECEIVER) ---
 @app.route('/webhook', methods=['POST'])
 def handle_webhook():
     """
-    Receives the 'tap' from your iPhone.
-    Expected JSON: {"text": "...", "payer": "..."}
+    Receives the structured data from the iOS Shortcut.
+    Expected JSON: {"merchant": "...", "amount": "...", "payer": "..."}
     """
     data = request.json
     if not data:
-        return jsonify({"status": "error", "message": "No JSON"}), 400
+        return jsonify({"status": "error", "message": "No JSON payload"}), 400
 
-    content = data.get('text', 'Test Transaction')
-    payer = data.get('payer', 'Mike')
+    # Extract data from the Shortcut request
+    merchant = data.get('merchant', 'Unknown Store')
+    amount = data.get('amount', '0.0')
+    payer = data.get('payer', 'Michael')
 
-    # 1. Create the Inline Keyboard (The Buttons)
+    # Create the Inline Keyboard (The Buttons)
     markup = types.InlineKeyboardMarkup(row_width=2)
 
-    # callback_data is the hidden string sent back to the server when clicked
-    btn_shared = types.InlineKeyboardButton("Shared 🏠",
-                                            callback_data="choice_shared")
+    # CRITICAL: Use a structured string for callback_data (max 64 bytes)
+    # Format: action|merchant|amount
+    cb_shared = f"btn_shrd|{merchant[:20]}|{amount}"
+    cb_private = f"btn_priv|{merchant[:20]}|{amount}"
+
+    btn_shared = types.InlineKeyboardButton("Shared 🏠", callback_data=cb_shared)
     btn_personal = types.InlineKeyboardButton("Personal 👤",
-                                              callback_data="choice_personal")
+                                              callback_data=cb_private)
 
     markup.add(btn_shared, btn_personal)
 
-    # 2. Send the message with buttons
+    # Format the message text with Markdown
     message_text = (
-        f"💳 *Transaction Received*\n\n"
-        f"👤 *Payer:* {payer}\n"
-        f"📝 *Details:* {content}\n\n"
-        f"How should we log this?"
+        f"💳 *New Transaction Detected*\n\n"
+        f"🏪 *Store:* `{merchant}`\n"
+        f"💰 *Amount:* `₪{amount}`\n"
+        f"👤 *Payer:* `{payer}`\n\n"
+        f"Should we split this expense?"
     )
 
+    # Send message to the Telegram group/chat
     bot.send_message(MY_CHAT_ID, message_text, reply_markup=markup,
                      parse_mode="Markdown")
 
-    return jsonify({"status": "ui_triggered"}), 200
+    return jsonify({"status": "success", "received": merchant}), 200
 
 
+# --- 3. CALLBACK HANDLER (INTERACTION) ---
 @bot.callback_query_handler(func=lambda call: True)
 def handle_button_click(call):
     """
-    This function runs when you tap 'Shared' or 'Personal' in Telegram.
+    Triggers when a user clicks 'Shared' or 'Personal'.
+    Unpacks the merchant and amount from the callback_data.
     """
-    # Identify which button was pressed
-    if call.data == "choice_shared":
-        result_label = "Shared ✅"
-    else:
-        result_label = "Personal 👤"
+    try:
+        # Unpack the data string: "action|merchant|amount"
+        parts = call.data.split('|')
+        action = parts[0]  # "btn_shrd" or "btn_priv"
+        merchant = parts[1]
+        amount = parts[2]
 
-    # 3. Update the existing message to show the choice (UX improvement)
-    # This replaces the buttons with a confirmation text
-    final_text = f"{call.message.text}\n\n📍 *Decision:* {result_label}\n(Not saved to DB yet)"
+        # Determine the decision label
+        if action == "btn_shrd":
+            result_label = "Shared 🏠"
+        else:
+            result_label = "Personal 👤"
 
-    bot.edit_message_text(
-        chat_id=call.message.chat.id,
-        message_id=call.message.message_id,
-        text=final_text,
-        parse_mode="Markdown"
-    )
+        # Update the UI: Reconstruct the message to confirm the choice
+        final_text = (
+            f"✅ *Transaction Finalized*\n\n"
+            f"🏪 *Store:* {merchant}\n"
+            f"💰 *Amount:* ₪{amount}\n\n"
+            f"📍 *Decision:* {result_label}\n"
+            f"_(Not saved to DB yet)_"
+        )
 
-    # 4. Show a small "Toast" notification at the top of Telegram
-    bot.answer_callback_query(call.id, f"Selection: {result_label}")
+        # Edit the original message to remove the buttons and show the result
+        bot.edit_message_text(
+            chat_id=call.message.chat.id,
+            message_id=call.message.message_id,
+            text=final_text,
+            parse_mode="Markdown"
+        )
+
+        # Answer the callback to remove the "loading" spinner on the button
+        bot.answer_callback_query(call.id, f"Logged as {result_label}")
+
+    except Exception as e:
+        print(f"Error in callback: {e}")
+        bot.answer_callback_query(call.id, "Error processing selection.")
+
 
 @app.route('/telegram', methods=['POST'])
 def telegram_input():
