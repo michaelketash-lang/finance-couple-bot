@@ -4,7 +4,8 @@ from flask import Flask, request, jsonify
 from telebot import types
 from dotenv import load_dotenv
 from ai_parser import parser_service
-from database_manager import add_expense
+from database_manager import add_expense, get_shared_monthly_totals
+import datetime
 
 # Load environment variables from .env file
 load_dotenv()
@@ -152,6 +153,7 @@ def handle_button_click(call):
     except Exception as e:
         print(f"Error: {e}")
         bot.answer_callback_query(call.id, "Error processing selection.")
+
 
 if __name__ == '__main__':
     app.run(port=8000, debug=True)
