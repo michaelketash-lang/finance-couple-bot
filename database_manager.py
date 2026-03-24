@@ -11,7 +11,7 @@ def setup_database():
     Initializes the database for expenses and for budgeting
     :return:
     '''
-    connection = sqlite3.connect('expenses.db')
+    connection = sqlite3.connect('finance_bot.db')
     # a cursor runs the commands we want to run in the database
     cursor = connection.cursor()
     # Creates the expenses table
@@ -27,10 +27,11 @@ def setup_database():
                 ''')
     # Creates the budgets table
     cursor.execute('''CREATE TABLE IF NOT EXISTS budgets (
-                                    category TEXT PRIMARY KEY CHECK(category IN ('Rent', 'Bills', 'Food', 'Transport', 'Home', 'Shopping', 'Health', 'Leisure', 'Other')),
-                                    monthly_target REAL NOT NULL
-                                    )
-                                ''')
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            category TEXT UNIQUE,
+                            monthly_target REAL
+                            )
+                        ''')
     # Creates the investments table
     cursor.execute('''CREATE TABLE IF NOT EXISTS investments (
                                         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -39,6 +40,15 @@ def setup_database():
                                         name TEXT,
                                         ticker TEXT DEFAULT NULL,
                                         expense_ratio REAL DEFAULT NULL                                      
+                                        )
+                                    ''')
+
+    # Creates the ai insights table
+    cursor.execute('''CREATE TABLE IF NOT EXISTS ai_insights (
+                                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                                        insight TEXT,
+                                        type TEXT CHECK(type IN('alert', 'summary', 'praise')),
+                                        isread BOOLEAN DEFAULT FALSE
                                         )
                                     ''')
     return True
@@ -54,7 +64,7 @@ def add_expense(merchant, amount, payer, split, category):
     :return True if successful, False otherwise
     """
     try:
-        with sqlite3.connect('expenses.db') as conn:
+        with sqlite3.connect('finance_bot.db') as conn:
             cursor = conn.cursor()
             #we use ? ? ? ? ? for security - it makes sure that we (or a user) can't trick the database with a command, it means that only text/numebers are expected her
             #it also deals with the messy formatting, sql requires strings to be in quotes, so names of places with strings can break the code. not when using ?.
@@ -74,7 +84,7 @@ def add_expense(merchant, amount, payer, split, category):
 def set_category_budget(category, monthly_target):
     """Inserts a new budget or updates an existing one for a category."""
     try:
-        with sqlite3.connect('expenses.db') as conn:
+        with sqlite3.connect('finance_bot.db') as conn:
             cursor = conn.cursor()
 
             # INSERT OR REPLACE handles both creation and updating!
@@ -93,7 +103,7 @@ def set_category_budget(category, monthly_target):
 
 def add_investment(category, amount, name, ticker, expense_ratio):
     try:
-        with sqlite3.connect('investments.db') as conn:
+        with sqlite3.connect('finance_bot.db') as conn:
             cursor = conn.cursor()
             sql = '''INSERT INTO investments (category, amount, name, ticker, expense_ratio) 
                      VALUES (?, ?, ?, ?, ?)'''
@@ -118,7 +128,7 @@ def get_total_monthly_expenses(year, month):
     accounting for personal vs. shared splits.
     """
     try:
-        with sqlite3.connect('expenses.db') as conn:
+        with sqlite3.connect('finance_bot.db') as conn:
             cursor = conn.cursor()
 
             # Format the date just like we did before (e.g., "2023-10%")
@@ -154,7 +164,7 @@ def get_average_total_monthly_expenses():
     :return average total amount spent per month across all categories
     """
     try:
-        with sqlite3.connect('expenses.db') as conn:
+        with sqlite3.connect('finance_bot.db') as conn:
             cursor = conn.cursor()
 
             sql = '''
@@ -190,7 +200,7 @@ def get_monthly_expenses_by_category(year, month, category):
     :return monthly_expenses_by_category
     """
     try:
-        with sqlite3.connect('expenses.db') as conn:
+        with sqlite3.connect('finance_bot.db') as conn:
             cursor = conn.cursor()
             month_filter = f"{year:04d}-{month:02d}%"
 
@@ -227,7 +237,7 @@ def get_average_monthly_spend_by_category(category):
     :return avg_monthly_spend_by_category
     """
     try:
-        with sqlite3.connect('expenses.db') as conn:
+        with sqlite3.connect('finance_bot.db') as conn:
             cursor = conn.cursor()
 
             sql = '''
@@ -266,7 +276,7 @@ def get_shared_monthly_totals(year, month):
     :return a list of tuples: [('Michael', 500.0), ('Ori', 300.0)]
     """
     try:
-        with sqlite3.connect('expenses.db') as conn:
+        with sqlite3.connect('finance_bot.db') as conn:
             cursor = conn.cursor()
             month_filter = f"{year:04d}-{month:02d}%"
 
@@ -310,7 +320,7 @@ def get_month_locked_weekly_expenses(year, month, week_number):
 
     # 2. Run the database query
     try:
-        with sqlite3.connect('expenses.db') as conn:
+        with sqlite3.connect('finance_bot.db') as conn:
             cursor = conn.cursor()
 
             # Filter down to the specific year and month (e.g., "2023-10%")
@@ -347,7 +357,7 @@ def get_month_locked_weekly_expenses(year, month, week_number):
 def get_total_budget():
     """Calculates the grand total of all category budgets combined."""
     try:
-        with sqlite3.connect('expenses.db') as conn:
+        with sqlite3.connect('finance_bot.db') as conn:
             cursor = conn.cursor()
 
             # Simply add up every row in the monthly_target column
@@ -396,6 +406,86 @@ def check_total_pacing(year, month):
 # ==============================================================================================================#
 #                              INVESTMENT DATABASE ANALYTICS                                                    #
 # ==============================================================================================================#
+
+# ==============================================================================================================#
+#                              AI INSIGHTS DATA COLLECTION                                                      #
+# ==============================================================================================================#
+
+def get_ai_context_data():
+    """
+    Gathers a financial snapshot of strictly the last 14 days for the AI Agent.
+    """
+    # Calculate exactly 14 days ago
+    fourteen_days_ago = (datetime.datetime.now() - datetime.timedelta(days=14)).strftime('%Y-%m-%d %H:%M:%S')
+
+    category_breakdown = []
+    recent_transactions = []
+
+    try:
+        with sqlite3.connect('finance_bot.db') as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+
+            # 1. Fetch Budgets (We still need these to know your monthly limits)
+            cursor.execute('SELECT category, monthly_target FROM budgets')
+            budgets = {row['category']: row['monthly_target'] for row in cursor.fetchall()}
+
+            # 2. Fetch Transactions from ONLY the last 14 days
+            cursor.execute('''
+                SELECT merchant, amount, category, payer, split, created_at 
+                FROM expenses 
+                WHERE created_at >= ? 
+                ORDER BY created_at DESC
+            ''', (fourteen_days_ago,))
+
+            transactions = cursor.fetchall()
+
+            # 3. Process the transactions and tally up the 14-day spend per category
+            category_totals = {cat: 0.0 for cat in budgets.keys()}
+
+            for row in transactions:
+                cat = row['category']
+                amt = row['amount']
+                split = row['split']
+
+                # Apply your split logic: if shared, it only costs you half!
+                actual_cost = amt / 2.0 if split == 'shared' else amt
+
+                if cat in category_totals:
+                    category_totals[cat] += actual_cost
+                else:
+                    category_totals[cat] = actual_cost
+
+                recent_transactions.append({
+                    "date": row['created_at'][:10],
+                    "merchant": row['merchant'],
+                    "amount": row['amount'],
+                    "category": cat,
+                    "payer": row['payer'],
+                    "split": split
+                })
+
+            # 4. Format the category breakdown for the AI
+            for cat, target in budgets.items():
+                spent_14_days = round(category_totals.get(cat, 0.0), 2)
+                category_breakdown.append({
+                    "category": cat,
+                    "monthly_budget": target,
+                    "spent_last_14_days": spent_14_days
+                })
+
+    except sqlite3.Error as e:
+        print(f"❌ Database Error in AI context gathering: {e}")
+
+    # The clean, simple briefcase of data
+    context = {
+        "timeframe": "Last 14 Days",
+        "category_breakdown": category_breakdown,
+        "recent_transactions": recent_transactions
+    }
+
+    return context
+
 
 if __name__ == '__main__':
     setup_database()
