@@ -94,9 +94,21 @@ def handle_manual_add(message):
         bot.reply_to(message, "❌ Please provide details. Ex: `/add 50 Aroma`")
         return
 
-    # The AI Brain does the heavy lifting of extracting amount and merchant
+    # 1. The AI Brain extracts data. If no number is found, it returns 0.0
     enriched = parser_service.parse(raw_text)
 
+    # 2. Verification: Check if the amount is missing or zero
+    if enriched['amount'] <= 0:
+        bot.reply_to(
+            message,
+            "⚠️ *No amount detected.*\n"
+            "Please include a price so I can log it correctly.\n"
+            "Ex: `/add 45 Super-Pharm`",
+            parse_mode="Markdown"
+        )
+        return
+
+    # 3. Proceed only if verification passes
     send_transaction_ui(
         chat_id=message.chat.id,
         merchant=enriched['merchant'],
@@ -104,7 +116,6 @@ def handle_manual_add(message):
         category=enriched['category'],
         payer=message.from_user.first_name
     )
-
 
 @bot.callback_query_handler(func=lambda call: True)
 def handle_button_click(call):
