@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 from ai_parser import parser_service
 from database_manager import add_expense
 from gmail_processor import gmail_engine
-
+from database_manager import setup_database
 # Load environment configuration
 load_dotenv()
 
@@ -23,20 +23,27 @@ bot = telebot.TeleBot(TELEGRAM_TOKEN, threaded=False)
 # In-memory set to prevent double-processing of the same Gmail notification
 processed_emails = set()
 
+with app.app_context():
+    setup_database()
 
 # --- HELPER FUNCTIONS ---
 
 def send_transaction_ui(chat_id, merchant, amount, category, payer):
     """
     Constructs and sends an interactive Telegram message with action buttons.
-    This ensures a consistent UI for manual, email, and card entries.
+    Uses a 5-part protocol: action|merchant|amount|category|payer
     """
     markup = types.InlineKeyboardMarkup(row_width=2)
 
-    # Callback data protocol: action|merchant|amount|category
-    # Note: Telegram limits callback data to 64 bytes
-    cb_shared = f"shrd|{merchant[:15]}|{amount}|{category}"
-    cb_priv = f"priv|{merchant[:15]}|{amount}|{category}"
+    # Clean and truncate strings to stay under Telegram's 64-byte callback limit
+    m_safe = str(merchant).replace('|', '').strip()[:10]
+    c_safe = str(category).replace('|', '').strip()[:10]
+    p_safe = str(payer).replace('|', '').strip()[:10]
+    a_safe = str(amount)
+
+    # Protocol: action|merchant|amount|category|payer
+    cb_shared = f"shrd|{m_safe}|{a_safe}|{c_safe}|{p_safe}"
+    cb_priv = f"priv|{m_safe}|{a_safe}|{c_safe}|{p_safe}"
 
     markup.add(
         types.InlineKeyboardButton("Shared 🏠", callback_data=cb_shared),
@@ -52,8 +59,7 @@ def send_transaction_ui(chat_id, merchant, amount, category, payer):
         f"Should we split this expense?"
     )
 
-    bot.send_message(chat_id, message_text, reply_markup=markup,
-                     parse_mode="Markdown")
+    bot.send_message(chat_id, message_text, reply_markup=markup, parse_mode="Markdown")
 
 
 def process_text_and_notify(raw_text, payer, chat_id=MY_CHAT_ID):
@@ -65,7 +71,6 @@ def process_text_and_notify(raw_text, payer, chat_id=MY_CHAT_ID):
     enriched = parser_service.parse(raw_text)
 
     if not enriched.get('is_expense', False):
-        print(f"DEBUG: AI determined content is NOT an expense. Skipping.")
         return False
 
     # Send the UI to the user for approval/categorization
@@ -165,12 +170,9 @@ def handle_manual_entry(message):
                             chat_id=message.chat.id)
 
 
+"""
 @bot.callback_query_handler(func=lambda call: True)
 def handle_ui_decision(call):
-    """
-    Processes the user's click on 'Shared' or 'Personal' buttons.
-    Saves the finalized transaction to the database.
-    """
     try:
         # Unpack callback data (action|merchant|amount|category)
         data_parts = call.data.split('|')
@@ -193,6 +195,61 @@ def handle_ui_decision(call):
             result_tag = "Shared 🏠" if db_split == "shared" else "Personal 👤"
             final_confirmation = (
                 f"✅ *Transaction Logged*\n\n"
+                f"🏪 *Store:* {merchant}\n"
+                f"💰 *Amount:* ₪{amount}\n"
+                f"📂 *Category:* {category}\n"
+                f"📍 *Type:* {result_tag}"
+            )
+            bot.edit_message_text(
+                chat_id=call.message.chat.id,
+                message_id=call.message.message_id,
+                text=final_confirmation,
+                parse_mode="Markdown"
+            )
+
+        bot.answer_callback_query(call.id)
+    except Exception as e:
+        print(f"Error handling button click: {e}")
+        bot.answer_callback_query(call.id, "Error saving transaction.")
+"""
+
+
+@bot.callback_query_handler(func=lambda call: True)
+def handle_ui_decision(call):
+    """
+    Processes the user's click on 'Shared' or 'Personal' buttons.
+    Saves the finalized transaction to the database.
+    """
+    try:
+        # פירוק הנתונים - חייב להיות 5 חלקים כדי להתאים ל-send_transaction_ui
+        data_parts = call.data.split('|')
+
+        # וידוא שהגיעו מספיק נתונים (מניעת קריסה)
+        if len(data_parts) < 5:
+            print(f"Error: Expected 5 parts, got {len(data_parts)}")
+            return
+
+        action = data_parts[0]
+        merchant = data_parts[1]
+        amount = data_parts[2]
+        category = data_parts[3]
+        original_payer = data_parts[4]
+
+        # Map UI action to DB split type
+        db_split = "shared" if action == "shrd" else "personal"
+
+        success = add_expense(
+            merchant=merchant,
+            amount=float(amount),
+            payer=original_payer,
+            split=db_split,
+            category=category
+        )
+
+        if success:
+            result_tag = "Shared 🏠" if db_split == "shared" else "Personal 👤"
+            final_confirmation = (
+                f"✅ *Transaction Logged for {original_payer}*\n\n"
                 f"🏪 *Store:* {merchant}\n"
                 f"💰 *Amount:* ₪{amount}\n"
                 f"📂 *Category:* {category}\n"

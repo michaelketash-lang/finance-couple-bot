@@ -18,7 +18,7 @@ class ExpenseAIParser:
 
     # Model configuration
     MODEL_NAME = "gpt-4o"
-    SUPPORTED_CATEGORIES = ["Food", "Transport", "Home", "Shopping", "Health",
+    SUPPORTED_CATEGORIES = ["Groceries","Eating Out", "Transport", "Utilities","Rent","Maintenance", "Shopping", "Health",
                             "Leisure", "Other"]
     DEFAULT_CURRENCY = "ILS"
 
@@ -36,11 +36,24 @@ class ExpenseAIParser:
         return api_key
 
     def _get_system_prompt(self) -> str:
-        categories_str = ", ".join(self.SUPPORTED_CATEGORIES)
+        categories_desc = (
+            "- Groceries: Supermarkets, Rami Levy, Shufersal, AM:PM, Victory, Local grocery stores.\n"
+            "- Eating Out: Restaurants, Wolt, Ten Bis, Coffee shops, Bars, Pizza, Deliveries.\n"
+            "- Transport: Fuel, Bus (Rav-Kav), Train, Parking (Pango/Cellopark), Car insurance/repairs.\n"
+            "- Utilities: Electricity (IEC), Water (Gihon/Mekorot), Gas, Internet, Cell phone bills.\n"
+            "- Rent: Monthly rent payments.\n"
+            "- Maintenance: Building committee (Va'ad Bayit), Home repairs, Hardware stores (Tambour), Cleaning supplies.\n"
+            "- Shopping: Clothes, Shoes, Electronics, Amazon, Gifts, Household items.\n"
+            "- Health: Pharmacy (Super-Pharm/Be), Doctor visits, Health insurance (Kupat Holim), Dentist.\n"
+            "- Leisure: Cinema, Hobbies, Vacation, Gym/Sports, Subscriptions (Netflix/Spotify).\n"
+            "- Other: Any transaction that absolutely doesn't fit (e.g., Bank fees, broad insurance)."
+        )
+
         return (
             f"You are a strict financial data extractor for an Israeli user named Michael Ketash. "
-            f"You will receive text containing an 'EMAIL BODY' and 'PDF CONTENT'. "
+            f"You will receive text from an EMAIL, a PDF document, or a DIRECT USER MESSAGE."
             f"Your mission is to identify if this is a valid expense and extract the details."
+            f"\n\nSTRICT CATEGORIES TO USE:\n{categories_desc}"
             f"\n\nSTRICT RULES:"
             f"\n1. MERCHANT IDENTIFICATION:"
             f"\n   - Check 'EMAIL BODY' for brand names (e.g., 'Wolt', 'Netflix', 'Ninja')."
@@ -49,9 +62,9 @@ class ExpenseAIParser:
             f"\n   - IGNORE payment gateways like 'Tranzila', 'iCount', 'Cardcom', 'YaadPay', 'CreditGuard'."
             f"\n   - NEVER use 'Michael Ketash' as the merchant; he is the customer."
             f"\n2. HEBREW FIXING: If names in 'PDF CONTENT' are reversed (Visual Hebrew), you MUST flip them (e.g., 'לפא' -> 'אפל')."
-            f"\n3. CATEGORIZATION: Map the expense ONLY to one of these: [{categories_str}]. Use 'Other' if unsure."
+            f"\n3. CATEGORIZATION: Map the expense ONLY to one of the 10 categories above. Use 'Other' only if unsure."
             f"\n4. AMOUNT: Extract the FINAL grand total to be paid as a float."
-            f"\n5. VALIDATION: Set 'is_expense' to true ONLY if it's a clear financial transaction/bill."
+            f"\n5. VALIDATION: Set 'is_expense' to true ONLY if it's a clear financial transaction, bill, or purchase."
             f"\n\nSTRICT JSON OUTPUT:"
             f"\n{{'is_expense': bool, 'merchant': str, 'amount': float, 'category': str}}"
         )
