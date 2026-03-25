@@ -160,7 +160,7 @@ def handle_manual_entry(message):
         return
 
     # 1. The AI Brain extracts data. If no number is found, it returns 0.0
-    enriched = parser_service.parse(raw_text)
+    enriched = parser_service.parse(user_text)
 
     # 2. Verification: Check if the amount is missing or zero
     if enriched['amount'] <= 0:
