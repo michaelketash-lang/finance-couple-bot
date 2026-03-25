@@ -29,21 +29,16 @@ with app.app_context():
 # --- HELPER FUNCTIONS ---
 
 def send_transaction_ui(chat_id, merchant, amount, category, payer):
-    """
-    Constructs and sends an interactive Telegram message with action buttons.
-    Uses a 5-part protocol: action|merchant|amount|category|payer
-    """
     markup = types.InlineKeyboardMarkup(row_width=2)
+    m_cb = str(merchant).replace('|', '').strip()[:5]
+    c_cb = str(category).replace('|', '').strip()[:5]
+    p_cb = str(payer).replace('|', '').strip()[:5]
+    a_cb = str(amount)
 
-    # Clean and truncate strings to stay under Telegram's 64-byte callback limit
-    m_safe = str(merchant).replace('|', '').strip()[:10]
-    c_safe = str(category).replace('|', '').strip()[:10]
-    p_safe = str(payer).replace('|', '').strip()[:10]
-    a_safe = str(amount)
+    cb_shared = f"shrd|{m_cb}|{a_cb}|{c_cb}|{p_cb}"
+    cb_priv = f"priv|{m_cb}|{a_cb}|{c_cb}|{p_cb}"
 
-    # Protocol: action|merchant|amount|category|payer
-    cb_shared = f"shrd|{m_safe}|{a_safe}|{c_safe}|{p_safe}"
-    cb_priv = f"priv|{m_safe}|{a_safe}|{c_safe}|{p_safe}"
+    print(f"[DEBUG] Generated Callback: {cb_shared} (Size: {len(cb_shared.encode('utf-8'))} bytes)")
 
     markup.add(
         types.InlineKeyboardButton("Shared 🏠", callback_data=cb_shared),
@@ -51,16 +46,14 @@ def send_transaction_ui(chat_id, merchant, amount, category, payer):
     )
 
     message_text = (
-        f"💳 *New Transaction Detected*\n\n"
+        f"💳 *New Transaction*\n\n"
         f"🏪 *Store:* `{merchant}`\n"
         f"💰 *Amount:* `₪{amount}`\n"
         f"📂 *Category:* `{category}`\n"
         f"👤 *Payer:* `{payer}`\n\n"
-        f"Should we split this expense?"
+        f"*Split?*"
     )
-
     bot.send_message(chat_id, message_text, reply_markup=markup, parse_mode="Markdown")
-
 
 def process_text_and_notify(raw_text, payer, chat_id=MY_CHAT_ID):
     """
@@ -216,27 +209,22 @@ def handle_ui_decision(call):
 
 @bot.callback_query_handler(func=lambda call: True)
 def handle_ui_decision(call):
-    """
-    Processes the user's click on 'Shared' or 'Personal' buttons.
-    Saves the finalized transaction to the database.
-    """
     try:
-        # פירוק הנתונים - חייב להיות 5 חלקים כדי להתאים ל-send_transaction_ui
-        data_parts = call.data.split('|')
+        print(f"[DEBUG] Button Pressed! Raw Data received: {call.data}")
 
-        # וידוא שהגיעו מספיק נתונים (מניעת קריסה)
+        data_parts = call.data.split('|')
+        print(f"[DEBUG] Split parts: {data_parts} (Count: {len(data_parts)})")
+
         if len(data_parts) < 5:
-            print(f"Error: Expected 5 parts, got {len(data_parts)}")
+            print(
+                f"[ERROR] Callback data is incomplete or corrupted: {call.data}")
             return
 
-        action = data_parts[0]
-        merchant = data_parts[1]
-        amount = data_parts[2]
-        category = data_parts[3]
-        original_payer = data_parts[4]
-
-        # Map UI action to DB split type
+        action, merchant, amount, category, original_payer = data_parts
         db_split = "shared" if action == "shrd" else "personal"
+
+        print(
+            f"[DEBUG] Attempting to save: {merchant}, {amount}, {original_payer}, {db_split}")
 
         success = add_expense(
             merchant=merchant,
@@ -247,25 +235,20 @@ def handle_ui_decision(call):
         )
 
         if success:
-            result_tag = "Shared 🏠" if db_split == "shared" else "Personal 👤"
-            final_confirmation = (
-                f"✅ *Transaction Logged for {original_payer}*\n\n"
-                f"🏪 *Store:* {merchant}\n"
-                f"💰 *Amount:* ₪{amount}\n"
-                f"📂 *Category:* {category}\n"
-                f"📍 *Type:* {result_tag}"
-            )
+            print(f"[SUCCESS] Transaction saved to database.")
             bot.edit_message_text(
                 chat_id=call.message.chat.id,
                 message_id=call.message.message_id,
-                text=final_confirmation,
+                text=f"✅ *Logged for {original_payer}*\n🏪 {merchant}... | ₪{amount} | {db_split}",
                 parse_mode="Markdown"
             )
+        else:
+            print(f"[ERROR] database_manager.add_expense returned False.")
 
         bot.answer_callback_query(call.id)
     except Exception as e:
-        print(f"Error handling button click: {e}")
-        bot.answer_callback_query(call.id, "Error saving transaction.")
+        print(f"[CRITICAL ERROR] In handle_ui_decision: {str(e)}")
+        bot.answer_callback_query(call.id, "System Error. Check Logs.")
 
 
 if __name__ == '__main__':
