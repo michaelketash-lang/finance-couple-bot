@@ -185,49 +185,6 @@ def handle_manual_entry(message):
 @bot.callback_query_handler(func=lambda call: True)
 def handle_ui_decision(call):
     try:
-        # Unpack callback data (action|merchant|amount|category)
-        data_parts = call.data.split('|')
-        action, merchant, amount, category = data_parts[0], data_parts[1], \
-        data_parts[2], data_parts[3]
-
-        # Map UI action to DB split type
-        db_split = "shared" if action == "shrd" else "personal"
-
-        # Persistence layer: Save to SQL database
-        success = add_expense(
-            merchant=merchant,
-            amount=float(amount),
-            payer=call.from_user.first_name,
-            split=db_split,
-            category=category
-        )
-
-        if success:
-            result_tag = "Shared 🏠" if db_split == "shared" else "Personal 👤"
-            final_confirmation = (
-                f"✅ *Transaction Logged*\n\n"
-                f"🏪 *Store:* {merchant}\n"
-                f"💰 *Amount:* ₪{amount}\n"
-                f"📂 *Category:* {category}\n"
-                f"📍 *Type:* {result_tag}"
-            )
-            bot.edit_message_text(
-                chat_id=call.message.chat.id,
-                message_id=call.message.message_id,
-                text=final_confirmation,
-                parse_mode="Markdown"
-            )
-
-        bot.answer_callback_query(call.id)
-    except Exception as e:
-        print(f"Error handling button click: {e}")
-        bot.answer_callback_query(call.id, "Error saving transaction.")
-"""
-
-
-@bot.callback_query_handler(func=lambda call: True)
-def handle_ui_decision(call):
-    try:
         print(f"[DEBUG] Button Pressed! Raw Data received: {call.data}")
 
         data_parts = call.data.split('|')
@@ -267,7 +224,6 @@ def handle_ui_decision(call):
     except Exception as e:
         print(f"[CRITICAL ERROR] In handle_ui_decision: {str(e)}")
         bot.answer_callback_query(call.id, "System Error. Check Logs.")
-
 
 if __name__ == '__main__':
     # Used only for local debugging (PythonAnywhere uses the WSGI file)
