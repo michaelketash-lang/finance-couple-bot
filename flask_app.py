@@ -30,21 +30,21 @@ with app.app_context():
 
 def send_transaction_ui(chat_id, merchant, amount, category, payer):
     markup = types.InlineKeyboardMarkup(row_width=2)
-    m_cb = str(merchant).replace('|', '').strip()[:5]
-    c_cb = str(category).replace('|', '').strip()[:5]
-    p_cb = str(payer).replace('|', '').strip()[:5]
-    a_cb = str(amount)
 
-    cb_shared = f"shrd|{m_cb}|{a_cb}|{c_cb}|{p_cb}"
-    cb_priv = f"priv|{m_cb}|{a_cb}|{c_cb}|{p_cb}"
+    m_safe = str(merchant).replace('|', '').strip()[:10]
+    p_safe = str(payer).replace('|', '').strip()[:10]
+    a_safe = str(amount)
+    c_safe = str(category).replace('|', '').strip()
 
-    print(f"[DEBUG] Generated Callback: {cb_shared} (Size: {len(cb_shared.encode('utf-8'))} bytes)")
+    cb_shared = f"shrd|{m_safe}|{a_safe}|{c_safe}|{p_safe}"
+    cb_priv = f"priv|{m_safe}|{a_safe}|{c_safe}|{p_safe}"
+
+    print(f"[DEBUG] Callback Length: {len(cb_shared.encode('utf-8'))} bytes")
 
     markup.add(
         types.InlineKeyboardButton("Shared 🏠", callback_data=cb_shared),
         types.InlineKeyboardButton("Personal 👤", callback_data=cb_priv)
     )
-
     message_text = (
         f"💳 *New Transaction*\n\n"
         f"🏪 *Store:* `{merchant}`\n"
