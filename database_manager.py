@@ -21,7 +21,7 @@ def setup_database():
                     amount REAL,
                     payer TEXT,
                     split TEXT CHECK(split IN('shared', 'personal')),
-                    category TEXT CHECK(category IN ('Rent', 'Bills', 'Food', 'Transport', 'Home', 'Shopping', 'Health', 'Leisure', 'Other')),
+                    category TEXT CHECK(category IN ('Rent', 'Utilities', 'Groceries', 'Eating Out', 'Transport','Maintenance', 'Shopping', 'Health', 'Leisure', 'Other')),
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                     )
                 ''')
@@ -51,10 +51,9 @@ def setup_database():
                                         isread BOOLEAN DEFAULT FALSE
                                         )
                                     ''')
-    return True
     #saves the changes - commit tells sqlite- update the db file.
     connection.commit()
-
+    return True
 # ==============================================================================================================#
 #                          DATABASE INSERTION (EXPENSES, BUDGETS AND INVESTMENTS                                #
 # ==============================================================================================================#
@@ -485,7 +484,6 @@ def get_ai_context_data():
     }
 
     return context
-
 
 if __name__ == '__main__':
     setup_database()
