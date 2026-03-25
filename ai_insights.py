@@ -16,7 +16,6 @@ class FinancialInsightsAgent:
     The 'Brain' of the finance bot.
     Retrieves formatted financial context and generates actionable insights.
     """
-
     def __init__(self):
         load_dotenv()
         self.api_key = os.getenv("OPENAI_API_KEY")
@@ -25,9 +24,6 @@ class FinancialInsightsAgent:
 
         self.client = OpenAI(api_key=self.api_key)
         self.model_name = "gpt-4o-mini"
-
-        from database_manager import setup_database
-        setup_database() # This ensures all tables exist!
 
     def _get_system_prompt(self):
         return(
@@ -159,19 +155,13 @@ class FinancialInsightsAgent:
 
 
 if __name__ == "__main__":
-    # ---------------------------------------------------------
-    # The 5-Minute Gatekeeper (For Testing)
-    # Looks at the current minute (0-59).
-    # Modulo 5 (% 5) ensures it only proceeds on the 0, 5, 10, 15... minute marks.
-    # ---------------------------------------------------------
-    current_minute = datetime.datetime.now().minute
+    today_ordinal = datetime.date.today().toordinal()
 
-    if current_minute % 5 != 0:
-        logger.info(f"Current minute is {current_minute}. Not a 5-minute interval. Sleeping...")
-        sys.exit()  # Stops the script immediately
+    if today_ordinal % 3 != 0:
+        logger.info(f"Day {today_ordinal} is not the 3rd day. Returning to sleep...")
+        sys.exit()
 
-    # If it IS a 5-minute mark, wake up the Agent!
-    logger.info("🧠 5-minute mark reached! Waking up the AI Agent Test...")
+    logger.info("🧠 3-Day interval reached! Waking up the AI Agent...")
     agent = FinancialInsightsAgent()
     agent.generate_insight()
-    logger.info("✅ Pipeline complete.")
+    logger.info("✅ Insight cycle complete.")
