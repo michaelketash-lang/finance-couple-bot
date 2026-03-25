@@ -5,6 +5,8 @@ from openai import OpenAI
 from dotenv import load_dotenv
 from database_manager import get_ai_context_data
 import sqlite3
+import datetime
+import sys
 # Logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -14,7 +16,6 @@ class FinancialInsightsAgent:
     The 'Brain' of the finance bot.
     Retrieves formatted financial context and generates actionable insights.
     """
-
     def __init__(self):
         load_dotenv()
         self.api_key = os.getenv("OPENAI_API_KEY")
@@ -23,9 +24,6 @@ class FinancialInsightsAgent:
 
         self.client = OpenAI(api_key=self.api_key)
         self.model_name = "gpt-4o-mini"
-
-        from database_manager import setup_database
-        setup_database() # This ensures all tables exist!
 
     def _get_system_prompt(self):
         return(
@@ -50,7 +48,6 @@ class FinancialInsightsAgent:
         2. Reasoning (Talk to AI)
         3. Action (Save to DB)
         """
-
         # 1. PERCEPTION: Get the last 14 days of data
         logger.info("Gathering the last 14 days of financial data...")
         context_data = get_ai_context_data()
@@ -80,11 +77,12 @@ class FinancialInsightsAgent:
 
             logger.info(f"💡 AI Insight ({insight_type}): {insight_text}")
 
-            # 3. ACTION: Save the insight into the database
-            self._save_to_database(insight_text, insight_type)
+            # 3. ACTION: Save the insight into the database and get the ID
+            insight_id = self._save_to_database(insight_text, insight_type)
 
-            # 3. Send to Telegram (The Megaphone)
-            self.send_to_telegram(insight_text, insight_type)
+            # 4. ACTION: Trigger Telegram
+            if insight_id:
+                self.send_to_telegram(insight_id, insight_text, insight_type)
 
         except Exception as e:
             logger.error(f"Post-processing failed: {e}")
@@ -93,56 +91,77 @@ class FinancialInsightsAgent:
         try:
             with sqlite3.connect('finance_bot.db') as conn:
                 cursor = conn.cursor()
-                # matches the table you created in database_manager.py [cite: 1]
                 sql = "INSERT INTO ai_insights (insight, type, isread) VALUES (?, ?, ?)"
                 cursor.execute(sql, (text, insight_type, False))
                 conn.commit()
             logger.info("✅ Insight saved to finance_bot.db")
+            return cursor.lastrowid
         except sqlite3.Error as e:
             logger.error(f"❌ Database error: {e}")
+            return None
 
-    def send_to_telegram(self, insight_text, insight_type):
+    def _mark_as_read(self, insight_id):
+        """A helper function to update the DB status."""
+        try:
+            with sqlite3.connect('finance_bot.db') as conn:
+                cursor = conn.cursor()
+                cursor.execute("UPDATE ai_insights SET isread = 1 WHERE id = ?", (insight_id,))
+                conn.commit()
+            logger.info(f"✅ Insight #{insight_id} marked as read in database.")
+        except sqlite3.Error as e:
+            logger.error(f"❌ Failed to mark insight as read: {e}")
+
+    def send_to_telegram(self, insight_id, insight_text, insight_type):
         """
-        Sends the generated insight directly to your Telegram chat.
+        Pure worker function: Receives data, sends it, and triggers the DB update.
         """
         import requests
 
-        # 1. Get credentials from .env
         bot_token = os.getenv("TELEGRAM_TOKEN")
         chat_id = os.getenv("MY_CHAT_ID")
 
         if not bot_token or not chat_id:
-            logger.error("Telegram credentials missing in .env. Skipping message.")
+            logger.error("Telegram credentials missing. Skipping message.")
             return
 
-        # 2. Format the "Telegram Prompt" (The visual template)
+        # Format the visual template
         icons = {
             "alert": "🚨 *FINANCIAL ALERT* 🚨",
             "praise": "🥳 *GOOD NEWS* 🥳",
             "summary": "📊 *WEEKLY SUMMARY* 📊"
         }
         header = icons.get(insight_type, "💡 *NEW INSIGHT*")
-
-        # Use Markdown for bold text
         telegram_message = f"{header}\n\n{insight_text}"
 
-        # 3. Send the request to Telegram's API
+        # Send to Telegram
         url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
         payload = {
             "chat_id": chat_id,
             "text": telegram_message,
-            "parse_mode": "Markdown"  # This allows the bold stars to work
+            "parse_mode": "Markdown"
         }
 
         try:
             response = requests.post(url, data=payload)
             if response.status_code == 200:
                 logger.info("🚀 Insight sent to Telegram!")
+
+                # Trigger the tiny helper function we just made
+                self._mark_as_read(insight_id)
             else:
                 logger.error(f"Telegram failed: {response.text}")
         except Exception as e:
             logger.error(f"Connection error to Telegram: {e}")
 
+
 if __name__ == "__main__":
+    today_ordinal = datetime.date.today().toordinal()
+
+    if today_ordinal % 3 != 0:
+        logger.info(f"Day {today_ordinal} is not the 3rd day. Returning to sleep...")
+        sys.exit()
+
+    logger.info("🧠 3-Day interval reached! Waking up the AI Agent...")
     agent = FinancialInsightsAgent()
     agent.generate_insight()
+    logger.info("✅ Insight cycle complete.")
