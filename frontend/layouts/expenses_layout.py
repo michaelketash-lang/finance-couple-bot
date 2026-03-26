@@ -80,41 +80,41 @@ def get_expenses_layout() -> dbc.Container:
         children=[
             # Persist DataTable edits per (split, month) key.
             dcc.Store(id=ids.edits_store, data={}, storage_type="memory"),
-            # Filters row: Shared/Personal toggle + export button (UI-only)
+            
+            # Filters row: Shared/Personal toggle + export button (Card Style)
             dbc.Row(
                 [
                     dbc.Col(
                         [
-                            html.Div("Shared vs Personal", style={"fontWeight": "bold"}),
-                            dbc.RadioItems(
-                                id=ids.split_radio,
-                                options=[
-                                    {"label": "Shared", "value": "shared"},
-                                    {"label": "Personal", "value": "personal"},
+                            html.Div(
+                                [
+                                    html.Span("Expense Type:", className="fw-bold me-3"),
+                                    dbc.RadioItems(
+                                        id=ids.split_radio,
+                                        options=[
+                                            {"label": "Shared", "value": "shared"},
+                                            {"label": "Personal", "value": "personal"},
+                                        ],
+                                        value=default_split,
+                                        inline=True,
+                                        className="mb-0", # Remove default bottom margin
+                                    ),
+                                    dbc.Button(
+                                        "Export to Google Sheets",
+                                        id=ids.export_btn,
+                                        color="dark",
+                                        className="ms-auto", # Push to the right
+                                    ),
                                 ],
-                                value=default_split,
-                                inline=True,
-                            ),
+                                className="d-flex align-items-center bg-white p-3 rounded shadow-sm w-100",
+                            )
                         ],
-                        md=4,
                         xs=12,
-                    ),
-                    dbc.Col(
-                        [
-                            html.Div("Export", style={"fontWeight": "bold"}),
-                            dbc.Button(
-                                "Export to Google Sheets",
-                                id=ids.export_btn,
-                                color="secondary",
-                                className="w-100",
-                            ),
-                        ],
-                        md=8,
-                        xs=12,
-                    ),
+                    )
                 ],
-                className="mb-3",
+                className="mb-4",
             ),
+            
             # Month subtabs row
             dbc.Row(
                 [
@@ -126,34 +126,62 @@ def get_expenses_layout() -> dbc.Container:
                         )
                     )
                 ],
-                className="mb-3",
+                className="mb-4",
             ),
-            # Analytics row: pie + monthly trend
+            
+            # Analytics row: pie + monthly trend (Cards Style)
             dbc.Row(
                 [
                     dbc.Col(
-                        dcc.Graph(
-                            id=ids.pie_graph,
-                            figure=pie_fig,
-                            config={"displayModeBar": False},
+                        html.Div(
+                            [
+                                html.H5("Category Breakdown", className="mb-3"),
+                                dcc.Graph(
+                                    id=ids.pie_graph,
+                                    figure=pie_fig,
+                                    config={"displayModeBar": False},
+                                )
+                            ],
+                            className="bg-white p-4 rounded shadow-sm h-100",
                         ),
                         md=6,
                         xs=12,
+                        className="mb-4 mb-md-0", # Bottom margin on mobile, none on desktop
                     ),
                     dbc.Col(
-                        dcc.Graph(
-                            id=ids.trends_graph,
-                            figure=trends_fig,
-                            config={"displayModeBar": False},
+                        html.Div(
+                            [
+                                html.H5("Monthly Trend", className="mb-3"),
+                                dcc.Graph(
+                                    id=ids.trends_graph,
+                                    figure=trends_fig,
+                                    config={"displayModeBar": False},
+                                )
+                            ],
+                            className="bg-white p-4 rounded shadow-sm h-100",
                         ),
                         md=6,
                         xs=12,
                     ),
                 ],
-                className="mb-3",
+                className="mb-4",
             ),
-            # Editable table (manual corrections)
-            dbc.Row([dbc.Col(table, xs=12)]),
+            
+            # Editable table (Card Style)
+            dbc.Row(
+                [
+                    dbc.Col(
+                        html.Div(
+                            [
+                                html.H5("Transactions", className="mb-3"),
+                                table
+                            ],
+                            className="bg-white p-4 rounded shadow-sm",
+                        ),
+                        xs=12
+                    )
+                ]
+            ),
         ],
     )
 
@@ -235,4 +263,3 @@ def register_expenses_callbacks(app: Dash) -> None:
 
         trends_fig = monthly_trends_bar_chart(combined)
         return pie_fig, trends_fig
-

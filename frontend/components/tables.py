@@ -38,21 +38,26 @@ def expenses_datatable(
                 "presentation": "dropdown",
             },
             {"name": "Payer", "id": "payer", "editable": True},
-            # Keep split in the payload so callbacks can merge edits safely (hidden to the user).
-            {"name": "split", "id": "split", "editable": False, "hidden": True},
+            # Note: Removed the "split" column from here so it remains hidden without causing errors, 
+            # but it is still accessible in the underlying `data` payload.
         ],
         editable=True,
         row_deletable=False,
         sort_action="native",
         page_size=10,
-        # RTL layout so Hebrew columns align correctly.
-        style_table={"overflowX": "auto", "direction": "rtl"},
+        # LTR layout + improved styling
+        style_table={"overflowX": "auto"},
         style_cell={
-            "textAlign": "right",
-            "padding": "6px",
+            "textAlign": "left",
+            "padding": "10px",
             "whiteSpace": "normal",
+            "fontFamily": "sans-serif",
         },
-        style_header={"textAlign": "right", "fontWeight": "bold"},
+        style_header={
+            "textAlign": "left",
+            "fontWeight": "bold",
+            "backgroundColor": "#f8f9fa",
+        },
         # Constrain category values to the allowed set.
         dropdown={"category": {"options": [{"label": c, "value": c} for c in categories]}},
     )
@@ -86,12 +91,17 @@ def budgets_datatable(
         row_deletable=False,
         sort_action="native",
         page_size=10,
-        style_table={"overflowX": "auto", "direction": "rtl"},
+        # LTR layout + improved styling
+        style_table={"overflowX": "auto"},
         style_cell={
-            "textAlign": "right",
-            "padding": "6px",
+            "textAlign": "left",
+            "padding": "10px",
             "whiteSpace": "normal",
+            "fontFamily": "sans-serif",
         },
-        style_header={"textAlign": "right", "fontWeight": "bold"},
+        style_header={
+            "textAlign": "left",
+            "fontWeight": "bold",
+            "backgroundColor": "#f8f9fa",
+        },
     )
-

@@ -32,18 +32,21 @@ def get_budget_layout() -> dbc.Container:
             dbc.Row(
                 [
                     dbc.Col(
-                        [
-                            html.H3("Budget Goals", className="mb-2"),
-                            html.P(
-                                "Set a monthly target per category (mock UI — persistence TBD).",
-                                className="text-muted",
-                            ),
-                            table,
-                        ],
+                        html.Div(
+                            [
+                                html.H4("Budget Goals", className="mb-2"),
+                                html.P(
+                                    "Set a monthly target per category.",
+                                    className="text-muted mb-4",
+                                ),
+                                table,
+                            ],
+                            className="bg-white p-4 rounded shadow-sm",
+                        ),
                         xs=12,
                     )
-                ]
+                ],
+                className="mb-4",
             )
         ],
     )
-

@@ -24,14 +24,15 @@ app = Dash(
 server = app.server  # Gunicorn/Render compatibility.
 
 app.layout = html.Div(
-    dir="rtl",
+    className="bg-light pb-5",  # Added subtle background and bottom padding
     children=[
         dbc.Container(
             fluid=True,
+            className="p-4",  # Added padding around the whole dashboard
             children=[
                 html.H2(
                     "Michael & Partner Finance Dashboard",
-                    className="text-center my-3",
+                    className="text-start my-4",  # Aligned left instead of center
                 ),
                 dbc.Tabs(
                     [
@@ -41,6 +42,7 @@ app.layout = html.Div(
                     ],
                     id="main-nav-tabs",
                     active_tab="expenses",
+                    className="mb-4",  # Added margin below the tabs for breathing room
                 ),
                 html.Div(id="page-expenses", children=get_expenses_layout()),
                 html.Div(
@@ -77,5 +79,4 @@ register_expenses_callbacks(app)
 
 
 if __name__ == "__main__":
-    app.run_server(debug=True)
-
+    app.run(debug=True, port=8050)  # Fixed the obsolete run_server bug!
