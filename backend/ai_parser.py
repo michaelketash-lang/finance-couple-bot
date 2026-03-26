@@ -5,51 +5,91 @@ from typing import Dict, Any, Optional
 from openai import OpenAI
 from dotenv import load_dotenv
 
-# Set up logging - better than 'print' for production debugging
+# Set up logging for production monitoring
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
 
 class ExpenseAIParser:
     """
     A service class to handle financial data extraction using LLMs.
+    Optimized for messy Hebrew PDF text and expense classification.
     """
-    # Constants - Centralized configuration
-    MODEL_NAME = "gpt-4o-mini"
-    SUPPORTED_CATEGORIES = ["Food", "Transport", "Home", "Shopping", "Health",
+
+    # Model configuration
+    MODEL_NAME = "gpt-4o"
+    SUPPORTED_CATEGORIES = ["Groceries","Eating Out", "Transport", "Utilities","Rent","Maintenance", "Shopping", "Health",
                             "Leisure", "Other"]
     DEFAULT_CURRENCY = "ILS"
 
     def __init__(self):
         load_dotenv()
-        self.api_key = os.getenv("OPENAI_API_KEY")
-        if not self.api_key:
-            logger.error("OPENAI_API_KEY missing from environment.")
-            raise EnvironmentError("API Key not found.")
-
-        # Reusing the client across calls (Efficiency)
+        self.api_key = self._get_api_key()
         self.client = OpenAI(api_key=self.api_key)
 
+    def _get_api_key(self) -> str:
+        """Retrieves the OpenAI API key from environment variables."""
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            logger.error("OPENAI_API_KEY missing from environment.")
+            raise EnvironmentError("API Key not found.")
+        return api_key
+
     def _get_system_prompt(self) -> str:
-        categories_str = ", ".join(self.SUPPORTED_CATEGORIES)
-        return (
-            f"You are a financial assistant for an Israeli user. "
-            f"Analyze transaction text and return a JSON object with: "
-            f"'merchant' (Clean English name, e.g., 'Aroma Espresso Bar' instead of 'AROMA TEL AVIV'), "
-            f"'amount' (Number, default 0.0 if not found), "
-            f"'category' (One of: {categories_str}), "
-            f"'currency' (Default 'ILS'). "
-            f"If the input is just a merchant name, extract category and clean the name. "
-            f"If the input includes a number, treat it as the amount."
+        categories_desc = (
+            "- Groceries: Supermarkets, Rami Levy, Shufersal, AM:PM, Victory, Local grocery stores.\n"
+            "- Eating Out: Restaurants, Wolt, Ten Bis, Coffee shops, Bars, Pizza, Deliveries.\n"
+            "- Transport: Fuel, Bus (Rav-Kav), Train, Parking (Pango/Cellopark), Car insurance/repairs.\n"
+            "- Utilities: Electricity (IEC), Water (Gihon/Mekorot), Gas, Internet, Cell phone bills.\n"
+            "- Rent: Monthly rent payments.\n"
+            "- Maintenance: Building committee (Va'ad Bayit), Home repairs, Hardware stores (Tambour), Cleaning supplies.\n"
+            "- Shopping: Clothes, Shoes, Electronics, Amazon, Gifts, Household items.\n"
+            "- Health: Pharmacy (Super-Pharm/Be), Doctor visits, Health insurance (Kupat Holim), Dentist.\n"
+            "- Leisure: Cinema, Hobbies, Vacation, Gym/Sports, Subscriptions (Netflix/Spotify).\n"
+            "- Other: Any transaction that absolutely doesn't fit (e.g., Bank fees, broad insurance)."
         )
 
+        return (
+            f"You are a strict financial data extractor for an Israeli user named Michael Ketash. "
+            f"You will receive text from an EMAIL, a PDF document, or a DIRECT USER MESSAGE."
+            f"Your mission is to identify if this is a valid expense and extract the details."
+            f"\n\nSTRICT CATEGORIES TO USE:\n{categories_desc}"
+            f"\n\nSTRICT RULES:"
+            f"\n1. MERCHANT IDENTIFICATION:"
+            f"\n   - Check 'EMAIL BODY' for brand names (e.g., 'Wolt', 'Netflix', 'Ninja')."
+            f"\n   - Check 'PDF CONTENT' for legal names (e.g., 'ח.פ', 'עוסק מורשה')."
+            f"\n   - PRIORITIZE the brand/business name over the product name."
+            f"\n   - IGNORE payment gateways like 'Tranzila', 'iCount', 'Cardcom', 'YaadPay', 'CreditGuard'."
+            f"\n   - NEVER use 'Michael Ketash' as the merchant; he is the customer."
+            f"\n2. HEBREW FIXING: If names in 'PDF CONTENT' are reversed (Visual Hebrew), you MUST flip them (e.g., 'לפא' -> 'אפל')."
+            f"\n3. CATEGORIZATION: Map the expense ONLY to one of the 10 categories above. Use 'Other' only if unsure."
+            f"\n4. AMOUNT: Extract the FINAL grand total to be paid as a float."
+            f"\n5. VALIDATION: Set 'is_expense' to true ONLY if it's a clear financial transaction, bill, or purchase."
+            f"\n\nSTRICT JSON OUTPUT:"
+            f"\n{{'is_expense': bool, 'merchant': str, 'amount': float, 'category': str}}"
+        )
+
+    def _clean_amount_value(self, raw_amount: Any) -> float:
+        """Utility to convert various AI outputs into a clean float."""
+        try:
+            if raw_amount is None:
+                return 0.0
+            # Remove currency symbols and commas, then convert to float
+            clean_str = str(raw_amount).replace('₪', '').replace(',',
+                                                                 '').strip()
+            return float(clean_str)
+        except (ValueError, TypeError):
+            return 0.0
+
     def _fetch_completion(self, user_input: str) -> Optional[str]:
-        """Handles the low-level API communication."""
+        """Handles the API call to OpenAI."""
         try:
             response = self.client.chat.completions.create(
                 model=self.MODEL_NAME,
                 messages=[
                     {"role": "system", "content": self._get_system_prompt()},
-                    {"role": "user", "content": f"Process: {user_input}"}
+                    {"role": "user",
+                     "content": f"Analyze this text: {user_input}"}
                 ],
                 response_format={"type": "json_object"}
             )
@@ -59,9 +99,9 @@ class ExpenseAIParser:
             return None
 
     def _sanitize_response(self, raw_json: Optional[str]) -> Dict[str, Any]:
-        """Validates the AI output and applies business logic fallbacks."""
-        # The 'Source of Truth' for our data structure
-        pattern_defaults = {
+        """Parses the AI's JSON output and applies default values/logic."""
+        defaults = {
+            "is_expense": False,
             "merchant": "Unknown",
             "amount": 0.0,
             "category": "Other",
@@ -69,35 +109,30 @@ class ExpenseAIParser:
         }
 
         if not raw_json:
-            return pattern_defaults
+            return defaults
 
         try:
-            parsed_data = json.loads(raw_json)
+            parsed = json.loads(raw_json)
+            # Ensure essential keys exist and amount is a valid float
+            parsed["amount"] = self._clean_amount_value(parsed.get("amount"))
+            parsed["is_expense"] = bool(parsed.get("is_expense", False))
 
-            # Type Casting: Ensure amount is a float
-            if "amount" in parsed_data and parsed_data["amount"] is not None:
-                try:
-                    parsed_data["amount"] = float(parsed_data["amount"])
-                except ValueError:
-                    parsed_data["amount"] = 0.0
-
-            # Merge with defaults: {**defaults, **actual_data}
-            # This ensures even if the AI misses a field, the app doesn't crash.
-            return {**pattern_defaults, **parsed_data}
+            # Merge parsed data with defaults to ensure all keys are present
+            return {**defaults, **parsed}
 
         except json.JSONDecodeError:
-            logger.warning("AI returned invalid JSON. Using fallbacks.")
-            return pattern_defaults
+            logger.warning("AI returned invalid JSON. Using fallback defaults.")
+            return defaults
 
     def parse(self, input_text: str) -> Dict[str, Any]:
         """
-        The Public Facade.
-        flow from input to structured output.
+        The main entry point.
+        Orchestrates fetching data from AI and sanitizing the result.
         """
-        logger.info(f"Processing input: {input_text}")
+        logger.info(f"Parsing input (Length: {len(input_text)})")
         raw_output = self._fetch_completion(input_text)
         return self._sanitize_response(raw_output)
 
 
-# Singleton Pattern Instance
+# Global singleton instance
 parser_service = ExpenseAIParser()
