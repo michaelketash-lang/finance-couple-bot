@@ -22,7 +22,7 @@ app = Flask(__name__)
 CORS(app)
 app.register_blueprint(api)
 
-create_database()
+setup_database()
 
 def send_transaction_ui(chat_id, merchant, amount, category, payer):
     """
