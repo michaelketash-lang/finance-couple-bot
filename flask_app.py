@@ -3,6 +3,9 @@ import telebot
 from flask import Flask, request, jsonify
 from telebot import types
 from dotenv import load_dotenv
+from flask import Flask, jsonify
+from flask_cors import CORS
+import sqlite3
 
 # Internal module imports
 from ai_parser import parser_service
@@ -27,6 +30,7 @@ with app.app_context():
     setup_database()
 
 # --- HELPER FUNCTIONS ---
+
 
 def send_transaction_ui(chat_id, merchant, amount, category, payer):
     markup = types.InlineKeyboardMarkup(row_width=2)
