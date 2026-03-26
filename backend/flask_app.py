@@ -5,7 +5,7 @@ from flask_cors import CORS
 from telebot import types
 from dotenv import load_dotenv
 from ai_parser import parser_service
-from database_manager import add_expense, get_shared_monthly_totals
+from database_manager import create_database, add_expense, get_shared_monthly_totals
 from api_routes import api
 import datetime
 
@@ -21,6 +21,8 @@ bot = telebot.TeleBot(TELEGRAM_TOKEN, threaded=False)
 app = Flask(__name__)
 CORS(app)
 app.register_blueprint(api)
+
+create_database()
 
 def send_transaction_ui(chat_id, merchant, amount, category, payer):
     """
