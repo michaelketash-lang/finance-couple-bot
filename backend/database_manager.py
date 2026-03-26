@@ -42,7 +42,6 @@ def setup_database():
                                         expense_ratio REAL DEFAULT NULL                                      
                                         )
                                     ''')
-
     # Creates the ai insights table
     cursor.execute('''CREATE TABLE IF NOT EXISTS ai_insights (
                                         id INTEGER PRIMARY KEY AUTOINCREMENT,

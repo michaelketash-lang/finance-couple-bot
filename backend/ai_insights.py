@@ -7,7 +7,6 @@ from database_manager import get_ai_context_data
 import sqlite3
 import datetime
 import sys
-# Logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -152,7 +151,6 @@ class FinancialInsightsAgent:
                 logger.error(f"Telegram failed: {response.text}")
         except Exception as e:
             logger.error(f"Connection error to Telegram: {e}")
-
 
 if __name__ == "__main__":
     today_ordinal = datetime.date.today().toordinal()
