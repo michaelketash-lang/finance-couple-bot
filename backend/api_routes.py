@@ -14,7 +14,7 @@ from database_manager import (
     check_total_pacing,
     get_ai_context_data,
     get_all_budgets,
-    get_raw_monthly_expenses, get_raw_yearly_expenses
+    get_raw_monthly_expenses, get_raw_yearly_expenses, get_yearly_summary
 )
 
 api = Blueprint('api', __name__)
