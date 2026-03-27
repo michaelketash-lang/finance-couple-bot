@@ -21,7 +21,7 @@ MY_CHAT_ID = os.getenv('MY_CHAT_ID')
 bot = telebot.TeleBot(TELEGRAM_TOKEN, threaded=False)
 app = Flask(__name__)
 CORS(app)
-app.register_blueprint(api)
+app.register_blueprint(api, url_prefix='/api')
 setup_database()
 processed_emails = set()
 
