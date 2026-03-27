@@ -82,3 +82,22 @@ def fetch_recent_months_data(months_back: int, split: str) -> pd.DataFrame:
 
     return pd.DataFrame(
         columns=["date", "merchant", "amount", "category", "payer", "split"])
+
+
+def fetch_yearly_data(year: int, split: str = "shared") -> pd.DataFrame:
+    """
+    Fetches raw data for all 12 months of a specific year to populate the trends chart.
+    """
+    all_dfs = []
+
+    # Loop through all 12 months
+    for month in range(1, 13):
+        df_month = fetch_raw_expenses(year, month, split)
+        all_dfs.append(df_month)
+
+    if all_dfs:
+        combined_df = pd.concat(all_dfs, ignore_index=True)
+        return combined_df
+
+    return pd.DataFrame(
+        columns=["date", "merchant", "amount", "category", "payer", "split"])
