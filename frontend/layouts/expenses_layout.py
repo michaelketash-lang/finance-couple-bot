@@ -1,19 +1,20 @@
 from __future__ import annotations
 
-from dataclasses import dataclass #to store ids for the callbacks.
+from dataclasses import dataclass
+from datetime import datetime
+from dateutil.relativedelta import relativedelta
 
-import pandas as pd #to store the expenses data.
-import dash_bootstrap_components as dbc #to create the layout of the page.
-from dash import Dash, Input, Output, State, dcc, html 
+import pandas as pd
+import dash_bootstrap_components as dbc
+from dash import Dash, Input, Output, State, dcc, html
 
-from components.charts import category_pie_chart, monthly_trends_bar_chart #to create the charts.
+from components.charts import category_pie_chart, monthly_trends_bar_chart
 from components.tables import expenses_datatable
-from mock_data import CATEGORIES, get_mock_expenses_df #to store the expenses data.
+from api_client import fetch_raw_expenses, fetch_recent_months_data, CATEGORIES
 
 
-@dataclass(frozen=True) #mapping cant be accidentally changed at runtime.
+@dataclass(frozen=True)
 class _Ids:
-    # Keep IDs centralized so callbacks stay readable.
     split_radio: str = "expenses-split-radio"
     month_tabs: str = "expenses-month-tabs"
     table: str = "expenses-table"
@@ -23,46 +24,46 @@ class _Ids:
     export_btn: str = "expenses-export-btn"
 
 
-MOCK_EXPENSES_DF = get_mock_expenses_df()
-MOCK_EXPENSES_DF["date"] = pd.to_datetime(MOCK_EXPENSES_DF["date"], errors="coerce")
-
-
-def _month_ids_sorted() -> list[str]:
-    # month_id looks like "2026-03".
-    months = MOCK_EXPENSES_DF["date"].dt.to_period("M").dropna().astype(str).unique().tolist()
-    return sorted(months)
+def _get_recent_month_ids(num_months: int = 6) -> list[str]:
+    """Generates a list of recent month IDs in YYYY-MM format."""
+    today = datetime.today()
+    return [(today - relativedelta(months=i)).strftime("%Y-%m") for i in
+            reversed(range(num_months))]
 
 
 def _default_month_id() -> str:
-    months = _month_ids_sorted()
-    return months[0] if months else "2026-01"
+    """Returns the current month in YYYY-MM format."""
+    return datetime.today().strftime("%Y-%m")
 
-#Create the children for the month tabs (January, February, etc.).
+
 def _month_tabs_children() -> list[dbc.Tab]:
+    """Dynamically creates UI tabs for the last 6 months."""
     children: list[dbc.Tab] = []
-    for month_id in _month_ids_sorted():
+    for month_id in _get_recent_month_ids():
         month_dt = pd.to_datetime(f"{month_id}-01", errors="coerce")
-        label = month_dt.strftime("%b") if pd.notna(month_dt) else month_id
+        label = month_dt.strftime("%b %Y") if pd.notna(month_dt) else month_id
         children.append(dbc.Tab(label=label, tab_id=month_id))
     return children
 
-#Create the dataframe for the selected month.
+
 def _get_month_df(month_id: str, split_value: str) -> pd.DataFrame:
-    period = pd.Period(month_id, freq="M")
-    df = MOCK_EXPENSES_DF[
-        (MOCK_EXPENSES_DF["split"] == split_value)
-        & (MOCK_EXPENSES_DF["date"].dt.to_period("M") == period)
-    ].copy()
-    df["date"] = df["date"].dt.strftime("%Y-%m-%d")
+    """Parses the month ID and fetches live data from the API."""
+    year, month = int(month_id.split("-")[0]), int(month_id.split("-")[1])
+    df = fetch_raw_expenses(year, month, split_value)
+    if not df.empty and "date" in df.columns:
+        df["date"] = df["date"].dt.strftime("%Y-%m-%d")
     return df
 
-#Create the layout for the expenses page.
+
 def get_expenses_layout() -> dbc.Container:
+    """Constructs the initial layout using live API data."""
     ids = _Ids()
     default_month = _default_month_id()
-
     default_split = "shared"
+
+    # Fetch initial data
     df_month = _get_month_df(default_month, default_split)
+    df_trends = fetch_recent_months_data(months_back=6, split=default_split)
 
     table = expenses_datatable(
         data=df_month.to_dict("records"),
@@ -71,39 +72,38 @@ def get_expenses_layout() -> dbc.Container:
     )
 
     pie_fig = category_pie_chart(df_month)
-    trends_fig = monthly_trends_bar_chart(
-        MOCK_EXPENSES_DF[MOCK_EXPENSES_DF["split"] == default_split].copy()
-    )
+    trends_fig = monthly_trends_bar_chart(df_trends)
 
     return dbc.Container(
         fluid=True,
         children=[
-            # Persist DataTable edits per (split, month) key.
             dcc.Store(id=ids.edits_store, data={}, storage_type="memory"),
-            
-            # Filters row: Shared/Personal toggle + export button (Card Style)
+
             dbc.Row(
                 [
                     dbc.Col(
                         [
                             html.Div(
                                 [
-                                    html.Span("Expense Type:", className="fw-bold me-3"),
+                                    html.Span("Expense Type:",
+                                              className="fw-bold me-3"),
                                     dbc.RadioItems(
                                         id=ids.split_radio,
                                         options=[
-                                            {"label": "Shared", "value": "shared"},
-                                            {"label": "Personal", "value": "personal"},
+                                            {"label": "Shared",
+                                             "value": "shared"},
+                                            {"label": "Personal",
+                                             "value": "personal"},
                                         ],
                                         value=default_split,
                                         inline=True,
-                                        className="mb-0", # Remove default bottom margin
+                                        className="mb-0",
                                     ),
                                     dbc.Button(
                                         "Export to Google Sheets",
                                         id=ids.export_btn,
                                         color="dark",
-                                        className="ms-auto", # Push to the right
+                                        className="ms-auto",
                                     ),
                                 ],
                                 className="d-flex align-items-center bg-white p-3 rounded shadow-sm w-100",
@@ -114,8 +114,7 @@ def get_expenses_layout() -> dbc.Container:
                 ],
                 className="mb-4",
             ),
-            
-            # Month subtabs row
+
             dbc.Row(
                 [
                     dbc.Col(
@@ -128,8 +127,7 @@ def get_expenses_layout() -> dbc.Container:
                 ],
                 className="mb-4",
             ),
-            
-            # Analytics row: pie + monthly trend (Cards Style)
+
             dbc.Row(
                 [
                     dbc.Col(
@@ -146,12 +144,12 @@ def get_expenses_layout() -> dbc.Container:
                         ),
                         md=6,
                         xs=12,
-                        className="mb-4 mb-md-0", # Bottom margin on mobile, none on desktop
+                        className="mb-4 mb-md-0",
                     ),
                     dbc.Col(
                         html.Div(
                             [
-                                html.H5("Monthly Trend", className="mb-3"),
+                                html.H5("6-Month Trend", className="mb-3"),
                                 dcc.Graph(
                                     id=ids.trends_graph,
                                     figure=trends_fig,
@@ -166,8 +164,7 @@ def get_expenses_layout() -> dbc.Container:
                 ],
                 className="mb-4",
             ),
-            
-            # Editable table (Card Style)
+
             dbc.Row(
                 [
                     dbc.Col(
@@ -199,13 +196,11 @@ def register_expenses_callbacks(app: Dash) -> None:
         active_month_id = active_month_id or _default_month_id()
         split_value = split_value or "shared"
 
-        # Load previously edited rows if they exist.
         store_data = store_data or {}
         key = f"{split_value}|{active_month_id}"
         if key in store_data:
             return store_data[key]
 
-        # Otherwise fall back to mock defaults.
         df_month = _get_month_df(active_month_id, split_value)
         return df_month.to_dict("records")
 
@@ -216,7 +211,8 @@ def register_expenses_callbacks(app: Dash) -> None:
         State(ids.split_radio, "value"),
         State(ids.edits_store, "data"),
     )
-    def _save_table_edits(table_data: list[dict], active_month_id: str, split_value: str, store_data: dict):
+    def _save_table_edits(table_data: list[dict], active_month_id: str,
+                          split_value: str, store_data: dict):
         active_month_id = active_month_id or _default_month_id()
         split_value = split_value or "shared"
 
@@ -232,34 +228,23 @@ def register_expenses_callbacks(app: Dash) -> None:
         Input(ids.split_radio, "value"),
         Input(ids.table, "data"),
     )
-    def _update_charts(active_month_id: str, split_value: str, table_data: list[dict]):
+    def _update_charts(active_month_id: str, split_value: str,
+                       table_data: list[dict]):
         active_month_id = active_month_id or _default_month_id()
         split_value = split_value or "shared"
 
-        # Use the edited table values for the selected month.
-        edited_month_df = pd.DataFrame(table_data) if table_data else _get_month_df(active_month_id, split_value)
+        edited_month_df = pd.DataFrame(
+            table_data) if table_data else _get_month_df(active_month_id,
+                                                         split_value)
         if not edited_month_df.empty and "date" in edited_month_df.columns:
-            edited_month_df["date"] = pd.to_datetime(edited_month_df["date"], errors="coerce")
+            edited_month_df["date"] = pd.to_datetime(edited_month_df["date"],
+                                                     errors="coerce")
 
-        # Pie reflects only the selected month.
         pie_fig = category_pie_chart(edited_month_df)
 
-        # Trends reflect all months; replace selected month with edited month.
-        all_split_df = MOCK_EXPENSES_DF[MOCK_EXPENSES_DF["split"] == split_value].copy()
-        period = pd.Period(active_month_id, freq="M")
+        # Re-fetch the 6-month historical data directly from the API
+        # so the trend chart updates instantly when swapping Personal/Shared
+        df_trends = fetch_recent_months_data(months_back=6, split=split_value)
+        trends_fig = monthly_trends_bar_chart(df_trends)
 
-        selected_mask = all_split_df["date"].dt.to_period("M") == period
-        base_other_months = all_split_df.loc[~selected_mask].copy()
-
-        # If edited_month_df is empty, fall back to original selected month.
-        if edited_month_df.empty:
-            edited_month_for_merge = all_split_df.loc[selected_mask].copy()
-        else:
-            edited_month_for_merge = edited_month_df.copy()
-            edited_month_for_merge["date"] = pd.to_datetime(edited_month_for_merge["date"], errors="coerce")
-
-        edited_month_for_merge["split"] = split_value
-        combined = pd.concat([base_other_months, edited_month_for_merge], ignore_index=True)
-
-        trends_fig = monthly_trends_bar_chart(combined)
         return pie_fig, trends_fig

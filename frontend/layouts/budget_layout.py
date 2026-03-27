@@ -5,24 +5,19 @@ import dash_bootstrap_components as dbc
 from dash import html
 
 from components.tables import budgets_datatable
-from mock_data import get_mock_budgets_df
-
-
-MOCK_BUDGETS_DF = get_mock_budgets_df()
-MOCK_BUDGETS_DF["monthly_target"] = pd.to_numeric(
-    MOCK_BUDGETS_DF["monthly_target"], errors="coerce"
-).fillna(0.0)
+from api_client import fetch_all_budgets
 
 
 def get_budget_layout() -> dbc.Container:
     """
-    Budget goals UI (mock data only).
-
-    This is an editable DataTable that lets you set a target budget per category.
-    Persistence can be added later by wiring callbacks + a REST API.
+    Budget goals UI.
+    Fetches live data from the Flask API.
     """
+    # Fetch data directly from the backend API
+    df_budgets = fetch_all_budgets()
+
     table = budgets_datatable(
-        data=MOCK_BUDGETS_DF.to_dict("records"),
+        data=df_budgets.to_dict("records"),
         table_id="budgets-table",
     )
 
