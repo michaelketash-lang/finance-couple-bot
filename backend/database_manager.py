@@ -562,5 +562,57 @@ def get_raw_yearly_expenses(year, split=None):
     except sqlite3.Error as e:
         print(f"❌ Database Error in get_raw_yearly_expenses: {e}")
         return []
+
+
+def get_yearly_summary(year, split=None):
+    """
+    Returns pre-calculated spending summaries for charts.
+    Drastically improves dashboard speed by doing aggregation on the server.
+    """
+    try:
+        with sqlite3.connect('finance_bot.db') as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            year_filter = f"{year:04d}-%"
+
+            # --- 1. Get Monthly Totals for Trend Chart ---
+            sql_trend = '''
+                SELECT strftime('%m', created_at) as month, SUM(amount) as total
+                FROM expenses
+                WHERE created_at LIKE ?
+                {split_filter}
+                GROUP BY month
+            '''
+            split_sql = "AND split = ?" if split else ""
+            sql_trend = sql_trend.format(split_filter=split_sql)
+
+            params = (year_filter, split) if split else (year_filter,)
+            cursor.execute(sql_trend, params)
+            trend_data = {row['month']: row['total'] for row in
+                          cursor.fetchall()}
+
+            # --- 2. Get Category Totals for Pie Chart ---
+            sql_categories = '''
+                SELECT category, SUM(amount) as total
+                FROM expenses
+                WHERE created_at LIKE ?
+                {split_filter}
+                GROUP BY category
+            '''
+            sql_categories = sql_categories.format(split_filter=split_sql)
+            cursor.execute(sql_categories, params)
+            category_data = {row['category']: row['total'] for row in
+                             cursor.fetchall()}
+
+            return {
+                "year": year,
+                "split": split,
+                "monthly_trend": trend_data,
+                "category_breakdown": category_data
+            }
+
+    except sqlite3.Error as e:
+        print(f"❌ Database Error in get_yearly_summary: {e}")
+        return {}
 if __name__ == '__main__':
     setup_database()

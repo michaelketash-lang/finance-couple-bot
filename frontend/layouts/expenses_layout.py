@@ -12,6 +12,8 @@ from components.charts import category_pie_chart, monthly_trends_bar_chart
 from components.tables import expenses_datatable
 from api_client import fetch_raw_expenses, fetch_yearly_data, CATEGORIES
 
+from frontend.api_client import fetch_yearly_summary
+
 
 @dataclass(frozen=True)
 class _Ids:
@@ -199,7 +201,7 @@ def register_expenses_callbacks(app: Dash) -> None:
         Input(ids.year_dropdown, "value"),
         Input(ids.month_tabs, "active_tab"),
         Input(ids.split_radio, "value"),
-        Input(ids.table, "data"),
+        Input(ids.table, "data"),  # Used to detect edits
     )
     def _update_charts(selected_year: int, active_month_str: str,
                        split_value: str, table_data: list[dict]):
@@ -208,15 +210,24 @@ def register_expenses_callbacks(app: Dash) -> None:
 
         split_value = split_value or "shared"
 
-        # Update Pie Chart (Based on current table data / selected month)
-        df_month = pd.DataFrame(
-            table_data) if table_data else fetch_raw_expenses(selected_year,
-                                                              int(active_month_str),
-                                                              split_value)
-        pie_fig = category_pie_chart(df_month)
+        # --- NEW FAST PATH: Use pre-aggregated summary ---
+        # Instead of fetching raw rows, we fetch a tiny JSON of totals.
+        summary_data = fetch_yearly_summary(selected_year, split_value)
 
-        # Update Trends Chart (Fetch the whole year)
-        df_yearly = fetch_yearly_data(selected_year, split_value)
-        trends_fig = monthly_trends_bar_chart(df_yearly, selected_year)
+        # Update Pie Chart:
+        # We need the monthly raw data ONLY if the table was edited,
+        # otherwise we use the fast summary.
+        df_month = pd.DataFrame(table_data) if table_data else None
+
+        # Update your category_pie_chart to handle summary data if df is None
+        # We will update charts.py next to accept this new format for speed.
+        pie_fig = category_pie_chart(df=df_month, summary_dict=summary_data.get(
+            "category_breakdown", {}))
+
+        # Update Trends Chart:
+        # Pass the pre-aggregated monthly trend data directly.
+        trends_fig = monthly_trends_bar_chart(
+            summary_dict=summary_data.get("monthly_trend", {}),
+            year=selected_year)
 
         return pie_fig, trends_fig

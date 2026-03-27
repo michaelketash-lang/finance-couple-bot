@@ -108,3 +108,17 @@ def fetch_yearly_data(year: int, split: str = "shared") -> pd.DataFrame:
     except Exception as e:
         print(f"Error fetching yearly raw expenses: {e}")
         return pd.DataFrame(columns=columns)
+
+
+def fetch_yearly_summary(year: int, split: str = "shared") -> dict:
+    """
+    Fetches pre-calculated yearly aggregates for speed.
+    """
+    url = f"{BASE_URL}/expenses/yearly/summary?year={year}&split={split}"
+    try:
+        response = requests.get(url)
+        response.raise_for_status()
+        return response.json()
+    except Exception as e:
+        print(f"Error fetching yearly summary: {e}")
+        return {}
