@@ -12,17 +12,20 @@ from database_manager import (
     get_month_locked_weekly_expenses,
     get_total_budget,
     check_total_pacing,
-    get_ai_context_data
+    get_ai_context_data,
+    get_all_budgets,
+    get_raw_monthly_expenses
 )
 
 api = Blueprint('api', __name__)
 
 # ==============================================================================================================#
-#                              EXPENSES                                                                         #
+#                                             EXPENSES ROUTES                                                   #
 # ==============================================================================================================#
 
 @api.route('/expenses', methods=['POST'])
 def api_add_expense():
+    """Adds a new expense record via JSON payload."""
     data = request.json
     success = add_expense(
         merchant=data['merchant'],
@@ -33,23 +36,32 @@ def api_add_expense():
     )
     return jsonify({"success": success})
 
-
 @api.route('/expenses/monthly', methods=['GET'])
 def api_monthly_expenses():
+    """Returns aggregated monthly total for a specific year and month."""
     year = int(request.args.get('year', datetime.date.today().year))
     month = int(request.args.get('month', datetime.date.today().month))
     total = get_total_monthly_expenses(year, month)
     return jsonify({"total": total, "year": year, "month": month})
 
+@api.route('/expenses/raw', methods=['GET'])
+def api_raw_expenses():
+    """Returns detailed expense records for the Dash DataTable."""
+    year = int(request.args.get('year', datetime.date.today().year))
+    month = int(request.args.get('month', datetime.date.today().month))
+    split = request.args.get('split') # Optional: 'shared' or 'personal'
+    data = get_raw_monthly_expenses(year, month, split)
+    return jsonify(data)
 
 @api.route('/expenses/average', methods=['GET'])
 def api_average_monthly_expenses():
+    """Returns the historical average monthly spending."""
     average = get_average_total_monthly_expenses()
     return jsonify({"average": average})
 
-
 @api.route('/expenses/by-category', methods=['GET'])
 def api_expenses_by_category():
+    """Returns total spending for a specific category and month."""
     year = int(request.args.get('year', datetime.date.today().year))
     month = int(request.args.get('month', datetime.date.today().month))
     category = request.args.get('category')
@@ -58,40 +70,21 @@ def api_expenses_by_category():
     total = get_monthly_expenses_by_category(year, month, category)
     return jsonify({"category": category, "total": total, "year": year, "month": month})
 
-
-@api.route('/expenses/average-by-category', methods=['GET'])
-def api_average_by_category():
-    category = request.args.get('category')
-    if not category:
-        return jsonify({"error": "category is required"}), 400
-    average = get_average_monthly_spend_by_category(category)
-    return jsonify({"category": category, "average": average})
-
-
 @api.route('/expenses/shared', methods=['GET'])
 def api_shared_monthly_totals():
+    """Returns shared expense totals grouped by payer."""
     year = int(request.args.get('year', datetime.date.today().year))
     month = int(request.args.get('month', datetime.date.today().month))
     totals = get_shared_monthly_totals(year, month)
     return jsonify({"totals": [{"payer": row[0], "total": row[1]} for row in totals]})
 
-
-@api.route('/expenses/weekly', methods=['GET'])
-def api_weekly_expenses():
-    year = int(request.args.get('year', datetime.date.today().year))
-    month = int(request.args.get('month', datetime.date.today().month))
-    week = int(request.args.get('week'))
-    if not week:
-        return jsonify({"error": "week is required (1-5)"}), 400
-    total = get_month_locked_weekly_expenses(year, month, week)
-    return jsonify({"total": total, "year": year, "month": month, "week": week})
-
 # ==============================================================================================================#
-#                              BUDGETS                                                                          #
+#                                             BUDGET ROUTES                                                     #
 # ==============================================================================================================#
 
 @api.route('/budget', methods=['POST'])
 def api_set_budget():
+    """Sets or updates a budget target for a specific category."""
     data = request.json
     success = set_category_budget(
         category=data['category'],
@@ -99,26 +92,27 @@ def api_set_budget():
     )
     return jsonify({"success": success})
 
-
-@api.route('/budget/total', methods=['GET'])
-def api_total_budget():
-    total = get_total_budget()
-    return jsonify({"total": total})
-
+@api.route('/budget/all', methods=['GET'])
+def api_all_budgets():
+    """Returns all category-specific budget targets."""
+    data = get_all_budgets()
+    return jsonify(data)
 
 @api.route('/budget/pacing', methods=['GET'])
 def api_budget_pacing():
+    """Returns progress toward the total monthly budget."""
     year = int(request.args.get('year', datetime.date.today().year))
     month = int(request.args.get('month', datetime.date.today().month))
     result = check_total_pacing(year, month)
     return jsonify(result)
 
 # ==============================================================================================================#
-#                              INVESTMENTS                                                                      #
+#                                             OTHER SERVICES                                                    #
 # ==============================================================================================================#
 
 @api.route('/investments', methods=['POST'])
 def api_add_investment():
+    """Adds a new investment record."""
     data = request.json
     success = add_investment(
         category=data['category'],
@@ -129,10 +123,7 @@ def api_add_investment():
     )
     return jsonify({"success": success})
 
-# ==============================================================================================================#
-#                              AI INSIGHTS                                                                      #
-# ==============================================================================================================#
-
 @api.route('/insights', methods=['GET'])
 def api_ai_insights():
+    """Returns context data for AI financial analysis."""
     return jsonify(get_ai_context_data())

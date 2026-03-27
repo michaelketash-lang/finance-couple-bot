@@ -484,5 +484,56 @@ def get_ai_context_data():
 
     return context
 
+
+# ==============================================================================================================#
+#                              RAW DATA EXTRACTION                                                              #
+# ==============================================================================================================#
+
+def get_raw_monthly_expenses(year, month, split=None):
+    """
+    Fetches all individual expense records for a specific month and year.
+    Optionally filters by split type ('shared' or 'personal').
+    """
+    try:
+        with sqlite3.connect('finance_bot.db') as conn:
+            conn.row_factory = sqlite3.Row  # This allows us to access columns by name
+            cursor = conn.cursor()
+
+            month_filter = f"{year:04d}-{month:02d}%"
+
+            if split:
+                sql = "SELECT merchant, amount, category, payer, split, strftime('%Y-%m-%d', created_at) as date FROM expenses WHERE created_at LIKE ? AND split = ?"
+                cursor.execute(sql, (month_filter, split))
+            else:
+                sql = "SELECT merchant, amount, category, payer, split, strftime('%Y-%m-%d', created_at) as date FROM expenses WHERE created_at LIKE ?"
+                cursor.execute(sql, (month_filter,))
+
+            rows = cursor.fetchall()
+            # Convert SQLite rows into a list of dictionaries
+            return [dict(row) for row in rows]
+
+    except sqlite3.Error as e:
+        print(f"❌ Database Error in get_raw_monthly_expenses: {e}")
+        return []
+
+
+def get_all_budgets():
+    """
+    Fetches all category budget targets from the budgets table.
+    """
+    try:
+        with sqlite3.connect('finance_bot.db') as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+
+            sql = "SELECT category, monthly_target FROM budgets"
+            cursor.execute(sql)
+
+            rows = cursor.fetchall()
+            return [dict(row) for row in rows]
+
+    except sqlite3.Error as e:
+        print(f"❌ Database Error in get_all_budgets: {e}")
+        return []
 if __name__ == '__main__':
     setup_database()
