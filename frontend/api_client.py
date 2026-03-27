@@ -122,3 +122,18 @@ def fetch_yearly_summary(year: int, split: str = "shared") -> dict:
     except Exception as e:
         print(f"Error fetching yearly summary: {e}")
         return {}
+
+
+def fetch_budget_pacing(year: int, month: int) -> dict:
+    """
+    Fetches the pacing data (status, amount over/under budget).
+    Uses existing GET /budget/pacing route.
+    """
+    url = f"{BASE_URL}/budget/pacing?year={year}&month={month}"
+    try:
+        response = requests.get(url)
+        response.raise_for_status()
+        return response.json() # {"status": "On Track", "amount": 150.0}
+    except Exception as e:
+        print(f"Error fetching budget pacing: {e}")
+        return {"status": "Error", "amount": 0.0}
