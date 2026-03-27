@@ -86,18 +86,25 @@ def fetch_recent_months_data(months_back: int, split: str) -> pd.DataFrame:
 
 def fetch_yearly_data(year: int, split: str = "shared") -> pd.DataFrame:
     """
-    Fetches raw data for all 12 months of a specific year to populate the trends chart.
+    Fetches raw data for all 12 months of a specific year in ONE single HTTP request.
+    This eliminates the N+1 query delay and drastically speeds up the dashboard.
     """
-    all_dfs = []
+    url = f"{BASE_URL}/expenses/yearly/raw?year={year}&split={split}"
+    columns = ["date", "merchant", "amount", "category", "payer", "split"]
 
-    # Loop through all 12 months
-    for month in range(1, 13):
-        df_month = fetch_raw_expenses(year, month, split)
-        all_dfs.append(df_month)
+    try:
+        response = requests.get(url)
+        response.raise_for_status()
+        data = response.json()
 
-    if all_dfs:
-        combined_df = pd.concat(all_dfs, ignore_index=True)
-        return combined_df
+        if not data:
+            return pd.DataFrame(columns=columns)
 
-    return pd.DataFrame(
-        columns=["date", "merchant", "amount", "category", "payer", "split"])
+        df = pd.DataFrame(data)
+        df["date"] = pd.to_datetime(df["date"], errors="coerce")
+        df["amount"] = pd.to_numeric(df["amount"], errors="coerce").fillna(0.0)
+        return df
+
+    except Exception as e:
+        print(f"Error fetching yearly raw expenses: {e}")
+        return pd.DataFrame(columns=columns)

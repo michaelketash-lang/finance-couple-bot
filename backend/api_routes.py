@@ -14,7 +14,7 @@ from database_manager import (
     check_total_pacing,
     get_ai_context_data,
     get_all_budgets,
-    get_raw_monthly_expenses
+    get_raw_monthly_expenses, get_raw_yearly_expenses
 )
 
 api = Blueprint('api', __name__)
@@ -127,3 +127,12 @@ def api_add_investment():
 def api_ai_insights():
     """Returns context data for AI financial analysis."""
     return jsonify(get_ai_context_data())
+
+@api.route('/expenses/yearly/raw', methods=['GET'])
+def api_raw_yearly_expenses():
+    """Returns detailed expense records for an entire year."""
+    year = int(request.args.get('year', datetime.date.today().year))
+    split = request.args.get('split')  # Can be None, 'shared', or 'personal'
+
+    data = get_raw_yearly_expenses(year, split)
+    return jsonify(data)

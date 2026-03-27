@@ -535,5 +535,32 @@ def get_all_budgets():
     except sqlite3.Error as e:
         print(f"❌ Database Error in get_all_budgets: {e}")
         return []
+
+def get_raw_yearly_expenses(year, split=None):
+    """
+    Fetches all expense records for an entire year in a single query.
+    This significantly improves performance by reducing database hits.
+    """
+    try:
+        with sqlite3.connect('finance_bot.db') as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+
+            # Filter by year (e.g., "2026-%")
+            year_filter = f"{year:04d}-%"
+
+            if split:
+                sql = "SELECT merchant, amount, category, payer, split, strftime('%Y-%m-%d', created_at) as date FROM expenses WHERE created_at LIKE ? AND split = ?"
+                cursor.execute(sql, (year_filter, split))
+            else:
+                sql = "SELECT merchant, amount, category, payer, split, strftime('%Y-%m-%d', created_at) as date FROM expenses WHERE created_at LIKE ?"
+                cursor.execute(sql, (year_filter,))
+
+            rows = cursor.fetchall()
+            return [dict(row) for row in rows]
+
+    except sqlite3.Error as e:
+        print(f"❌ Database Error in get_raw_yearly_expenses: {e}")
+        return []
 if __name__ == '__main__':
     setup_database()
