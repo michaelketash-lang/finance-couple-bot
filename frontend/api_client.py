@@ -105,6 +105,21 @@ def fetch_yearly_summary(year: int, split: str = "shared") -> dict:
         return {}
 
 
+def save_category_budget(category: str, monthly_target: float) -> bool:
+    """
+    Saves (upserts) a monthly budget target for a single category.
+    Returns True on success, False on failure.
+    """
+    url = f"{BASE_URL}/budget"
+    try:
+        response = session.post(url, json={"category": category, "monthly_target": monthly_target})
+        response.raise_for_status()
+        return response.json().get("success", False)
+    except Exception as e:
+        print(f"Error saving budget for {category}: {e}")
+        return False
+
+
 def fetch_budget_pacing(year: int, month: int) -> dict:
     """
     Fetches the pacing data (status, amount over/under budget).
