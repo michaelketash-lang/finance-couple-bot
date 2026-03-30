@@ -15,7 +15,7 @@ from database_manager import (
     get_ai_context_data,
     get_all_budgets,
     get_raw_monthly_expenses, get_raw_yearly_expenses, get_yearly_summary,
-    get_spending_per_person_per_month, get_monthly_settlement
+    get_spending_per_person_per_month, get_monthly_settlement, get_personal_monthly_totals
 )
 
 api = Blueprint('api', __name__)
@@ -87,13 +87,21 @@ def api_monthly_settlement():
     result = get_monthly_settlement(year, month)
     return jsonify(result)
 
-@api.route('/expenses/shared', methods=['GET'])
-def api_shared_monthly_totals():
-    """Returns shared expense totals grouped by payer."""
+@api.route('/expenses/personal', methods=['GET'])
+def api_personal_monthly_totals():
+    """Returns total personal spending per person for a specific month."""
     year = int(request.args.get('year', datetime.date.today().year))
     month = int(request.args.get('month', datetime.date.today().month))
-    totals = get_shared_monthly_totals(year, month)
-    return jsonify({"totals": [{"payer": row[0], "total": row[1]} for row in totals]})
+    data = get_personal_monthly_totals(year, month)
+    return jsonify({"year": year, "month": month, "spending": data})
+
+@api.route('/expenses/shared', methods=['GET'])
+def api_shared_monthly_totals():
+    """Returns the actual shared expense burden per person (total shared / 2)."""
+    year = int(request.args.get('year', datetime.date.today().year))
+    month = int(request.args.get('month', datetime.date.today().month))
+    per_person = get_shared_monthly_totals(year, month)
+    return jsonify({"per_person_share": per_person, "year": year, "month": month})
 
 # ==============================================================================================================#
 #                                             BUDGET ROUTES                                                     #
