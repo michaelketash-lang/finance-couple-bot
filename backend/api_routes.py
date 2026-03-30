@@ -14,7 +14,8 @@ from database_manager import (
     check_total_pacing,
     get_ai_context_data,
     get_all_budgets,
-    get_raw_monthly_expenses, get_raw_yearly_expenses, get_yearly_summary
+    get_raw_monthly_expenses, get_raw_yearly_expenses, get_yearly_summary,
+    get_spending_per_person_per_month, get_monthly_settlement
 )
 
 api = Blueprint('api', __name__)
@@ -69,6 +70,22 @@ def api_expenses_by_category():
         return jsonify({"error": "category is required"}), 400
     total = get_monthly_expenses_by_category(year, month, category)
     return jsonify({"category": category, "total": total, "year": year, "month": month})
+
+@api.route('/expenses/per-person', methods=['GET'])
+def api_spending_per_person():
+    """Returns total spending per person for a specific month."""
+    year = int(request.args.get('year', datetime.date.today().year))
+    month = int(request.args.get('month', datetime.date.today().month))
+    data = get_spending_per_person_per_month(year, month)
+    return jsonify({"year": year, "month": month, "spending": data})
+
+@api.route('/expenses/settlement', methods=['GET'])
+def api_monthly_settlement():
+    """Returns who owes whom for a specific month based on shared expenses."""
+    year = int(request.args.get('year', datetime.date.today().year))
+    month = int(request.args.get('month', datetime.date.today().month))
+    result = get_monthly_settlement(year, month)
+    return jsonify(result)
 
 @api.route('/expenses/shared', methods=['GET'])
 def api_shared_monthly_totals():
