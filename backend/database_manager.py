@@ -268,10 +268,12 @@ def get_average_monthly_spend_by_category(category):
         print(f"❌ Database Error: {e}")
         return 0.0
 
-def get_shared_monthly_totals(year, month):
+def get_spending_per_person_per_month(year, month):
     """
-    Fetches the total shared expenses for a given month, grouped by payer.
-    :return a list of tuples: [('Michael', 500.0), ('Ori', 300.0)]
+    Calculates the total financial burden per person for a specific month.
+    - Personal expenses: full amount charged to the payer.
+    - Shared expenses: split evenly (half each) regardless of who paid.
+    :return: dict mapping payer name to their total spending, e.g. {'Ori': 500.0, 'Michael': 620.0}
     """
     try:
         with sqlite3.connect('finance_bot.db') as conn:
@@ -279,18 +281,129 @@ def get_shared_monthly_totals(year, month):
             month_filter = f"{year:04d}-{month:02d}%"
 
             sql = '''
-                SELECT payer, SUM(amount) 
-                FROM expenses 
+                WITH all_people AS (
+                    SELECT DISTINCT payer FROM expenses WHERE created_at LIKE ?
+                ),
+                personal_totals AS (
+                    SELECT payer, SUM(amount) as personal_spent
+                    FROM expenses
+                    WHERE split = 'personal' AND created_at LIKE ?
+                    GROUP BY payer
+                ),
+                shared_total AS (
+                    SELECT SUM(amount) / 2.0 as shared_burden
+                    FROM expenses
+                    WHERE split = 'shared' AND created_at LIKE ?
+                )
+                SELECT
+                    p.payer,
+                    ROUND(COALESCE(pt.personal_spent, 0) + COALESCE(st.shared_burden, 0), 2) as total_spent
+                FROM all_people p
+                LEFT JOIN personal_totals pt ON p.payer = pt.payer
+                CROSS JOIN shared_total st
+                ORDER BY total_spent DESC
+            '''
+
+            cursor.execute(sql, (month_filter, month_filter, month_filter))
+            rows = cursor.fetchall()
+            return {payer: total for payer, total in rows}
+
+    except sqlite3.Error as e:
+        print(f"❌ Database Error in get_spending_per_person_per_month: {e}")
+        return {}
+
+def get_shared_monthly_totals(year, month):
+    """
+    Returns the actual shared expense burden per person for a given month.
+    Calculated as (total shared expenses across both payers) / 2.
+    :return: float representing each person's share of shared spending.
+    """
+    try:
+        with sqlite3.connect('finance_bot.db') as conn:
+            cursor = conn.cursor()
+            month_filter = f"{year:04d}-{month:02d}%"
+
+            sql = '''
+                SELECT SUM(amount) / 2.0
+                FROM expenses
                 WHERE split = 'shared' AND created_at LIKE ?
+            '''
+
+            cursor.execute(sql, (month_filter,))
+            result = cursor.fetchone()[0]
+            return round(result, 2) if result is not None else 0.0
+
+    except sqlite3.Error as e:
+        print(f"❌ Database Error in get_shared_monthly_totals: {e}")
+        return 0.0
+
+def get_personal_monthly_totals(year, month):
+    """
+    Returns the total personal (non-shared) spending per person for a given month.
+    :return: dict mapping payer to their personal spend, e.g. {'Ori': 300.0, 'Michael': 450.0}
+    """
+    try:
+        with sqlite3.connect('finance_bot.db') as conn:
+            cursor = conn.cursor()
+            month_filter = f"{year:04d}-{month:02d}%"
+
+            sql = '''
+                SELECT payer, ROUND(SUM(amount), 2)
+                FROM expenses
+                WHERE split = 'personal' AND created_at LIKE ?
                 GROUP BY payer
             '''
 
             cursor.execute(sql, (month_filter,))
-            return cursor.fetchall()
+            rows = cursor.fetchall()
+            return {payer: total for payer, total in rows}
 
     except sqlite3.Error as e:
-        print(f"❌ Database Error in get_shared_monthly_totals: {e}")
-        return []
+        print(f"❌ Database Error in get_personal_monthly_totals: {e}")
+        return {}
+
+def get_monthly_settlement(year, month):
+    """
+    Calculates who owes whom for a specific month based on shared expenses.
+    Each person's fair share is half the total shared spending.
+    Whoever paid less than their fair share owes the other the difference.
+    :return: dict with keys 'debtor', 'creditor', 'amount'.
+             If perfectly balanced, returns {'balanced': True, 'amount': 0.0}.
+    """
+    try:
+        with sqlite3.connect('finance_bot.db') as conn:
+            cursor = conn.cursor()
+            month_filter = f"{year:04d}-{month:02d}%"
+            cursor.execute('''
+                SELECT payer, SUM(amount)
+                FROM expenses
+                WHERE split = 'shared' AND created_at LIKE ?
+                GROUP BY payer
+            ''', (month_filter,))
+            payments = dict(cursor.fetchall())
+
+        if not payments:
+            return {"balanced": True, "amount": 0.0}
+
+        total_shared = sum(payments.values())
+        fair_share = total_shared / 2.0
+
+        # Positive = overpaid (is owed money), Negative = underpaid (owes money)
+        balances = {person: round(paid - fair_share, 2) for person, paid in payments.items()}
+
+        # Find the person who underpaid (owes) and the one who overpaid (is owed)
+        debtor = min(balances, key=balances.get)
+        creditor = max(balances, key=balances.get)
+        amount = round(abs(balances[debtor]), 2)
+
+        if amount == 0.0:
+            return {"balanced": True, "amount": 0.0}
+
+        return {"debtor": debtor, "creditor": creditor, "amount": amount}
+
+    except sqlite3.Error as e:
+        print(f"❌ Database Error in get_monthly_settlement: {e}")
+        return {}
 
 def get_month_locked_weekly_expenses(year, month, week_number):
     """
