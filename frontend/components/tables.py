@@ -90,19 +90,64 @@ def budgets_datatable(
 ):
     """
     Editable DataTable for budget targets per category.
+    Columns: Category | Target (editable) | Actual (read-only) | Remaining (read-only).
+    Rows turn red when actual spend exceeds target, green when under budget.
     """
-    amount_format = {"specifier": ",.2f"}
+    amount_format = {"specifier": ",.0f"}
+
+    style_data_conditional = [
+        # Zebra stripes baseline
+        {"if": {"row_index": "odd"}, "backgroundColor": "#f8fafc"},
+        {"if": {"row_index": "even"}, "backgroundColor": "white"},
+        # Over budget → red tint
+        {
+            "if": {
+                "filter_query": "{remaining} < 0",
+            },
+            "backgroundColor": "#fff5f5",
+            "color": "#c53030",
+        },
+        # Under budget (target set and spend > 0) → green tint
+        {
+            "if": {
+                "filter_query": "{remaining} > 0 && {actual} > 0",
+            },
+            "backgroundColor": "#f0fff4",
+            "color": "#276749",
+        },
+        # Highlight active cell
+        {"if": {"state": "active"}, "backgroundColor": "#e2e8f0",
+         "border": "1px solid #cbd5e1"},
+    ]
 
     return dash_table.DataTable(
         id=table_id,
         data=data,
         columns=[
-            {"name": "Category", "id": "category", "editable": False},
             {
-                "name": "Target Budget (Monthly, ILS)",
+                "name": "Category",
+                "id": "category",
+                "editable": False,
+            },
+            {
+                "name": "Target ₪",
                 "id": "monthly_target",
                 "type": "numeric",
                 "editable": True,
+                "format": amount_format,
+            },
+            {
+                "name": "Actual ₪",
+                "id": "actual",
+                "type": "numeric",
+                "editable": False,
+                "format": amount_format,
+            },
+            {
+                "name": "Remaining ₪",
+                "id": "remaining",
+                "type": "numeric",
+                "editable": False,
                 "format": amount_format,
             },
         ],
@@ -116,7 +161,9 @@ def budgets_datatable(
             "textAlign": "left",
             "padding": "12px",
             "fontFamily": "'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
-            "borderBottom": "1px solid #e2e8f0"
+            "color": "#2d3748",
+            "border": "none",
+            "borderBottom": "1px solid #e2e8f0",
         },
         style_header={
             "backgroundColor": "#2c3e50",
@@ -124,7 +171,8 @@ def budgets_datatable(
             "fontWeight": "bold",
             "textAlign": "left",
             "padding": "12px",
-            "border": "none"
+            "border": "none",
         },
+        style_data_conditional=style_data_conditional,
         **kwargs
     )

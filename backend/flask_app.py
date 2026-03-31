@@ -5,11 +5,16 @@ from flask_cors import CORS
 from telebot import types
 from dotenv import load_dotenv
 from ai_parser import parser_service
-from database_manager import setup_database, add_expense, get_shared_monthly_totals
-from gmail_processor import gmail_engine
+from database_manager import setup_database, add_expense
 from api_routes import api
-import datetime
+import base64
+import json
+from gmail_processor import GmailProcessor
 
+USER_EMAILS = {
+    "michael.ketash@gmail.com": "michael",  # Use your real email
+    "orimac11@gmail.com": "ori"  # Use Ori's real email
+}
 # Load environment variables from .env file
 load_dotenv()
 
@@ -74,41 +79,44 @@ def process_text_and_notify(raw_text, payer, chat_id=MY_CHAT_ID):
     return True
 
 
-# --- FLASK ROUTES (WEBHOOKS) ---
-
 @app.route('/gmail-webhook', methods=['POST'])
 def handle_gmail_push():
     envelope = request.get_json()
     if not envelope: return "Bad Request", 400
 
     try:
-        pdf_results = gmail_engine.get_latest_email_pdf_content()
+        # 1. Find out whose email triggered the webhook
+        message = envelope.get('message', {})
+        data_b64 = message.get('data')
+        if not data_b64: return "OK", 200
+
+        data_json = json.loads(base64.b64decode(data_b64).decode('utf-8'))
+        email_address = data_json.get('emailAddress', '').lower()
+
+        # 2. Match the email to Michael or Ori
+        user_name = USER_EMAILS.get(email_address)
+        if not user_name: return "OK", 200  # Ignore emails not in our dict
+
+        # 3. Fire up the processor for that specific user
+        engine = GmailProcessor(user_name)
+        pdf_results = engine.get_latest_email_pdf_content()
+
         if not pdf_results: return "OK", 200
 
-        # We only want to process the FIRST valid expense PDF per email ID
-        # to avoid double messages (e.g., one for Receipt and one for Tax Invoice)
         for item in pdf_results:
             msg_id = item.get('msg_id')
+            if msg_id in processed_emails: continue
 
-            if msg_id in processed_emails:
-                continue
-
-            # If we successfully parsed and notified ONE PDF from this email...
-            if process_text_and_notify(item['text'], payer="Michael"):
+            # Pass the user_name to your AI parser so the DB knows who paid
+            if process_text_and_notify(item['text'],
+                                       payer=user_name.capitalize()):
                 processed_emails.add(msg_id)
-
-                if len(processed_emails) > 100:
-                    processed_emails.pop()
-
-                # CRITICAL: Stop searching other PDFs in the same email
                 break
 
         return "OK", 200
-
     except Exception as e:
-        print(f"Error in Gmail Webhook route: {e}")
+        print(f"Webhook Error: {e}")
         return "Internal Error", 500
-
 
 @app.route('/webhook', methods=['POST'])
 def handle_card_app_alert():

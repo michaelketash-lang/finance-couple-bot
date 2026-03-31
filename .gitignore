@@ -1,16 +1,17 @@
 # --- Google API Secrets (CRITICAL) ---
 credentials.json
+client_secret_*.json
 token.json
 token.pickle
-client_secret_*.json
+token_*.json
 
 # --- Environment Variables ---
 .env
 
 # --- Databases ---
 *.db
-expenses.db
-# (If you use SQLite, this prevents your actual data from being uploaded)
+*.db-journal
+*.sqlite3
 
 # --- Python ---
 __pycache__/
@@ -20,11 +21,9 @@ __pycache__/
 .Python
 env/
 venv/
+.venv/
 pip-log.txt
 pip-delete-this-directory.txt
-.venv
-.env
-.venv
 build/
 develop-eggs/
 dist/
@@ -53,4 +52,3 @@ Thumbs.db
 
 # --- Temporary Files ---
 temp_*
-# (This ignores the temporary PDFs we download and delete)

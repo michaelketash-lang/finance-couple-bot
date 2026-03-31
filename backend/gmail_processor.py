@@ -9,7 +9,8 @@ SCOPES = ['https://www.googleapis.com/auth/gmail.readonly']
 
 
 class GmailProcessor:
-    def __init__(self):
+    def __init__(self,username):
+        self.username = username
         self.creds = self._load_credentials()
         self.service = build('gmail', 'v1', credentials=self.creds)
 
@@ -25,12 +26,11 @@ class GmailProcessor:
         ]
 
     def _load_credentials(self):
-        """Loads user credentials from the local token file."""
-        if os.path.exists('token.json'):
-            return Credentials.from_authorized_user_file('token.json', SCOPES)
+        token_filename = f'token_{self.username}.json'
+        if os.path.exists(token_filename):
+            return Credentials.from_authorized_user_file(token_filename, SCOPES)
         else:
-            raise FileNotFoundError(
-                "token.json not found. Run gmail_setup.py first.")
+            raise FileNotFoundError(f"{token_filename} missing.")
 
     def _get_latest_message_meta(self):
         """Fetches the ID of the most recent message in the inbox."""
@@ -159,5 +159,3 @@ class GmailProcessor:
         return extracted_results
 
 
-# Singleton instance for the application
-gmail_engine = GmailProcessor()

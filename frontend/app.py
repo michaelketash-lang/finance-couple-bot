@@ -3,7 +3,7 @@ from __future__ import annotations
 from dash import Dash, Input, Output, html
 import dash_bootstrap_components as dbc
 
-from layouts.budget_layout import get_budget_layout
+from layouts.budget_layout import get_budget_layout, register_budget_callbacks
 from layouts.expenses_layout import get_expenses_layout, register_expenses_callbacks
 
 
@@ -76,6 +76,7 @@ def _toggle_pages(active_tab: str):
 
 
 register_expenses_callbacks(app)
+register_budget_callbacks(app)
 
 
 if __name__ == "__main__":
