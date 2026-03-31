@@ -120,6 +120,37 @@ def save_category_budget(category: str, monthly_target: float) -> bool:
         return False
 
 
+def fetch_settlement(year: int, month: int) -> dict:
+    """
+    Fetches the monthly settlement result.
+    Returns {debtor, creditor, amount} or {balanced: True, amount: 0.0}.
+    """
+    url = f"{BASE_URL}/expenses/settlement?year={year}&month={month}"
+    try:
+        response = session.get(url)
+        response.raise_for_status()
+        return response.json()
+    except Exception as e:
+        print(f"Error fetching settlement: {e}")
+        return {"balanced": True, "amount": 0.0}
+
+
+def fetch_personal_totals(year: int, month: int) -> dict:
+    """
+    Fetches total personal spending per person for a given month.
+    Returns {payer: personal_amount}, e.g. {'Michael': 450.0, 'Ori': 300.0}.
+    """
+    url = f"{BASE_URL}/expenses/personal?year={year}&month={month}"
+    try:
+        response = session.get(url)
+        response.raise_for_status()
+        data = response.json()
+        return {k: float(v) for k, v in data.get("spending", {}).items()}
+    except Exception as e:
+        print(f"Error fetching personal totals: {e}")
+        return {}
+
+
 def fetch_budget_pacing(year: int, month: int) -> dict:
     """
     Fetches the pacing data (status, amount over/under budget).

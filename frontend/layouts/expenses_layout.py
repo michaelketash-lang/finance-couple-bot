@@ -12,7 +12,7 @@ from components.charts import category_pie_chart, monthly_trends_bar_chart, \
     CATEGORIES
 from components.tables import expenses_datatable
 from api_client import fetch_raw_expenses, fetch_yearly_data, \
-    fetch_budget_pacing
+    fetch_budget_pacing, fetch_settlement, fetch_personal_totals
 
 
 @dataclass(frozen=True)
@@ -330,7 +330,7 @@ def register_expenses_callbacks(app: Dash) -> None:
         Output(ids.payer_summary_div, "children"),
         Input(ids.year_dropdown, "value"),
         Input(ids.month_tabs, "active_tab"),
-        Input(ids.table, "data")  # Refresh when table edits occur
+        Input(ids.table, "data"),
     )
     def _update_payer_summary(selected_year: int, active_month_str: str,
                               table_data: list[dict]):
@@ -339,39 +339,86 @@ def register_expenses_callbacks(app: Dash) -> None:
 
         month = int(active_month_str)
 
-        # Fetch ALL expenses for the month (empty string means fetch both shared and personal)
-        df_all = fetch_raw_expenses(selected_year, month, split="")
+        # --- Fetch all three data sources in parallel-friendly order ---
+        df_shared = fetch_raw_expenses(selected_year, month, split="shared")
+        personal_totals = fetch_personal_totals(selected_year, month)
+        settlement = fetch_settlement(selected_year, month)
 
-        if df_all.empty:
-            return html.Div("No transactions this month.",
-                            className="text-muted")
+        if df_shared.empty and not personal_totals:
+            return html.Div("No transactions this month.", className="text-muted")
 
-        # Group by Payer and Split
-        summary = df_all.groupby(['payer', 'split'])[
-            'amount'].sum().reset_index()
-        payers = df_all['payer'].dropna().unique()
+        # --- Shared paid per person (what each physically paid, not their fair share) ---
+        shared_paid: dict[str, float] = {}
+        if not df_shared.empty:
+            shared_paid = df_shared.groupby("payer")["amount"].sum().to_dict()
 
+        # --- Determine all payers present this month ---
+        payers = sorted(set(list(shared_paid.keys()) + list(personal_totals.keys())))
+
+        # --- Build one card per person ---
         cards = []
         for p in payers:
-            p_data = summary[summary['payer'] == p]
-            shared_amt = p_data[p_data['split'] == 'shared']['amount'].sum()
-            personal_amt = p_data[p_data['split'] == 'personal']['amount'].sum()
+            paid_shared = shared_paid.get(p, 0.0)
+            paid_personal = personal_totals.get(p, 0.0)
 
-            # Create a nice summary card for each person
+            # Net total after settlement = fair share of shared + personal
+            total_shared_all = sum(shared_paid.values())
+            fair_share = total_shared_all / 2.0
+            net_total = fair_share + paid_personal
+
+            # --- Settlement line ---
+            is_balanced = settlement.get("balanced", False)
+            if is_balanced or settlement.get("amount", 0.0) == 0.0:
+                settlement_line = html.Div(
+                    "Settled ✓",
+                    className="fw-medium text-success",
+                )
+            elif settlement.get("debtor") == p:
+                settlement_line = html.Div(
+                    f"Owes {settlement['creditor']}: ₪{settlement['amount']:,.0f}",
+                    className="fw-medium text-danger",
+                )
+            else:
+                settlement_line = html.Div(
+                    f"{settlement.get('debtor', '?')} owes you: ₪{settlement['amount']:,.0f}",
+                    className="fw-medium text-success",
+                )
+
             card = dbc.Card(
                 dbc.CardBody([
-                    html.H6(f"👤 {p}", className="fw-bold mb-2 text-dark"),
-                    html.Div(f"Shared: ₪{shared_amt:,.0f}",
-                             className="text-primary fw-medium"),
-                    html.Div(f"Personal: ₪{personal_amt:,.0f}",
-                             className="text-secondary fw-medium"),
+                    html.H6(f"{p}", className="fw-bold mb-3 text-dark"),
+                    html.Div(
+                        [
+                            html.Span("Shared paid:", className="text-muted me-2"),
+                            html.Span(f"₪{paid_shared:,.0f}", className="fw-medium text-primary"),
+                        ],
+                        className="d-flex justify-content-between mb-1",
+                    ),
+                    html.Div(
+                        [
+                            html.Span("Personal:", className="text-muted me-2"),
+                            html.Span(f"₪{paid_personal:,.0f}", className="fw-medium text-secondary"),
+                        ],
+                        className="d-flex justify-content-between mb-1",
+                    ),
+                    html.Div(
+                        [
+                            html.Span("Settlement:", className="text-muted me-2"),
+                            settlement_line,
+                        ],
+                        className="d-flex justify-content-between mb-1",
+                    ),
                     html.Hr(className="my-2"),
-                    html.Div(f"Total: ₪{(shared_amt + personal_amt):,.0f}",
-                             className="fw-bold text-dark")
+                    html.Div(
+                        [
+                            html.Span("Net Total:", className="fw-bold text-dark me-2"),
+                            html.Span(f"₪{net_total:,.0f}", className="fw-bold text-dark"),
+                        ],
+                        className="d-flex justify-content-between",
+                    ),
                 ]),
-                className="shadow-sm me-3 mb-2 border-0",
-                style={"backgroundColor": "#f8f9fa", "minWidth": "180px",
-                       "display": "inline-block"}
+                className="shadow-sm border-0 me-3 mb-2",
+                style={"backgroundColor": "#f8f9fa", "minWidth": "240px"},
             )
             cards.append(card)
 
