@@ -12,7 +12,7 @@ from components.charts import category_pie_chart, monthly_trends_bar_chart, \
     CATEGORIES
 from components.tables import expenses_datatable
 from api_client import fetch_raw_expenses, fetch_yearly_data, \
-    fetch_budget_pacing, fetch_settlement, fetch_personal_totals
+    fetch_budget_pacing, fetch_settlement, fetch_personal_totals, update_expense
 
 
 @dataclass(frozen=True)
@@ -32,6 +32,8 @@ class _Ids:
     # Data & Table
     table: str = "expenses-table"
     edits_store: str = "expenses-edits-store"
+    ids_store: str = "expenses-ids-store"
+    edit_status: str = "expenses-edit-status"
     # Payer Summary
     payer_summary_div: str = "expenses-payer-summary"
 
@@ -80,6 +82,7 @@ def get_expenses_layout() -> dbc.Container:
         fluid=True,
         children=[
             dcc.Store(id=ids.edits_store, data={}, storage_type="memory"),
+            dcc.Store(id=ids.ids_store, data=[], storage_type="memory"),
 
             # --- ROW 1: CONTROLS ---
             dbc.Row(
@@ -210,8 +213,13 @@ def get_expenses_layout() -> dbc.Container:
                                         {'if': {'row_index': 'odd'},
                                          'backgroundColor': '#f2f2f2'}],
                                 ),
+                                html.Div(
+                                    id=ids.edit_status,
+                                    className="mt-2 text-success fw-medium",
+                                    style={"fontSize": "0.875rem", "minHeight": "20px"},
+                                ),
 
-                                # NEW: Payer Summary Section
+                                # Payer Summary Section
                                 html.Hr(className="my-4"),
                                 html.H6("Monthly Totals by Payer",
                                         className="mb-3 fw-bold text-muted"),
@@ -230,9 +238,13 @@ def get_expenses_layout() -> dbc.Container:
 def register_expenses_callbacks(app: Dash) -> None:
     ids = _Ids()
 
-    # Callback 1: Update Table
+    # Callback 1: Update Table + ID store
+    # The store holds a plain list of row IDs in the same order as the table rows.
+    # This is the source of truth for IDs — completely independent of what the
+    # DataTable renders, so no risk of it being stripped or lost on cell edit.
     @app.callback(
         Output(ids.table, "data"),
+        Output(ids.ids_store, "data"),
         Input(ids.year_dropdown, "value"),
         Input(ids.month_tabs, "active_tab"),
         Input(ids.split_radio, "value"),
@@ -240,7 +252,7 @@ def register_expenses_callbacks(app: Dash) -> None:
     def _update_table(selected_year: int, active_month_str: str,
                       split_value: str):
         if not selected_year or not active_month_str:
-            return []
+            return [], []
 
         month = int(active_month_str)
         split_value = split_value or "shared"
@@ -249,7 +261,10 @@ def register_expenses_callbacks(app: Dash) -> None:
         if not df_month.empty and "date" in df_month.columns:
             df_month["date"] = df_month["date"].dt.strftime("%Y-%m-%d")
 
-        return df_month.to_dict("records")
+        records = df_month.to_dict("records")
+        # Store IDs as a plain list: [id_of_row0, id_of_row1, ...]
+        row_ids = [r.get("id") for r in records]
+        return records, row_ids
 
     # Callback 2: Update Charts and KPIs using Pandas aggregation
     @app.callback(
@@ -423,3 +438,56 @@ def register_expenses_callbacks(app: Dash) -> None:
             cards.append(card)
 
         return html.Div(cards, className="d-flex flex-wrap")
+
+    # Callback 4: Save inline cell edits back to the database
+    #
+    # How edit detection works:
+    #   - data_timestamp fires every time the table data changes — both when
+    #     the user edits a cell AND when our own _update_table callback rewrites
+    #     all rows on a month/year switch.
+    #   - We diff data vs data_previous row by row to find what changed.
+    #   - If exactly ONE row differs → the user edited a cell → save it.
+    #   - If more than one row differs → it was a full table refresh (month
+    #     switch) → skip silently. This is the key guard that prevents false saves.
+    #   - prevent_initial_call=True ensures we don't fire on first page load.
+    @app.callback(
+        Output(ids.edit_status, "children"),
+        Input(ids.table, "data_timestamp"),
+        State(ids.table, "data"),
+        State(ids.table, "data_previous"),
+        State(ids.ids_store, "data"),
+        prevent_initial_call=True,
+    )
+    def _save_inline_edit(_ts, current_data: list[dict],
+                          previous_data: list[dict], row_ids: list):
+        if not current_data or not previous_data or not row_ids:
+            return ""
+
+        # Find the index of the single changed row
+        changed_indices = [
+            i for i, (curr, prev) in enumerate(zip(current_data, previous_data))
+            if curr != prev
+        ]
+
+        # More than one row changed → full table refresh, not a user edit
+        if len(changed_indices) != 1:
+            return ""
+
+        row_index = changed_indices[0]
+        expense_id = row_ids[row_index]  # Look up ID from the store by position
+
+        if not expense_id:
+            return "Could not save: ID not found in store."
+
+        row = current_data[row_index]
+        success = update_expense(
+            expense_id=int(expense_id),
+            merchant=row.get("merchant", ""),
+            amount=float(row.get("amount", 0)),
+            category=row.get("category", ""),
+            payer=row.get("payer", ""),
+        )
+
+        if success:
+            return f"✓ {row.get('merchant', 'Row')} updated"
+        return "Failed to save — check the server logs."

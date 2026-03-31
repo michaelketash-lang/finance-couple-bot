@@ -646,6 +646,27 @@ def update_expense_category(expense_id, new_category):
         return False
 
 
+def update_expense(expense_id, merchant, amount, category, payer):
+    """
+    Updates all editable fields of a specific expense record.
+    Returns True if a row was updated, False otherwise.
+    """
+    try:
+        with sqlite3.connect('finance_bot.db') as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """UPDATE expenses
+                   SET merchant = ?, amount = ?, category = ?, payer = ?
+                   WHERE id = ?""",
+                (merchant, float(amount), category, payer, expense_id)
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+    except sqlite3.Error as e:
+        print(f"❌ Database Error in update_expense: {e}")
+        return False
+
+
 def get_all_budgets():
     """
     Fetches all category budget targets from the budgets table.

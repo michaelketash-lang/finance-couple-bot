@@ -19,9 +19,10 @@ CATEGORIES = [
 def fetch_raw_expenses(year: int, month: int, split: str = "shared") -> pd.DataFrame:
     """
     Fetches raw expense rows from the API to populate the DataTable and Charts.
+    Includes the row id so edits can be saved back to the correct DB record.
     """
     url = f"{BASE_URL}/expenses/raw?year={year}&month={month}&split={split}"
-    columns = ["date", "merchant", "amount", "category", "payer", "split"]
+    columns = ["id", "date", "merchant", "amount", "category", "payer", "split"]
 
     try:
         response = session.get(url)
@@ -117,6 +118,27 @@ def save_category_budget(category: str, monthly_target: float) -> bool:
         return response.json().get("success", False)
     except Exception as e:
         print(f"Error saving budget for {category}: {e}")
+        return False
+
+
+def update_expense(expense_id: int, merchant: str, amount: float,
+                   category: str, payer: str) -> bool:
+    """
+    Saves edits to a single expense record via PUT /expenses/<id>.
+    Returns True on success, False on failure.
+    """
+    url = f"{BASE_URL}/expenses/{expense_id}"
+    try:
+        response = session.put(url, json={
+            "merchant": merchant,
+            "amount": amount,
+            "category": category,
+            "payer": payer,
+        })
+        response.raise_for_status()
+        return response.json().get("success", False)
+    except Exception as e:
+        print(f"Error updating expense {expense_id}: {e}")
         return False
 
 

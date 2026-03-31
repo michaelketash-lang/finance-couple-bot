@@ -16,7 +16,7 @@ from database_manager import (
     get_all_budgets,
     get_raw_monthly_expenses, get_raw_yearly_expenses, get_yearly_summary,
     get_spending_per_person_per_month, get_monthly_settlement, get_personal_monthly_totals,
-    update_expense_category
+    update_expense_category, update_expense
 )
 
 api = Blueprint('api', __name__)
@@ -184,3 +184,21 @@ def api_update_category(expense_id):
     if not success:
         return jsonify({"error": "Expense not found"}), 404
     return jsonify({"message": "Category updated"})
+
+
+@api.route('/expenses/<int:expense_id>', methods=['PUT'])
+def api_update_expense(expense_id):
+    """Updates all editable fields of a specific expense (merchant, amount, category, payer)."""
+    data = request.get_json()
+    merchant = data.get('merchant')
+    amount = data.get('amount')
+    category = data.get('category')
+    payer = data.get('payer')
+
+    if not all([merchant, amount is not None, category, payer]):
+        return jsonify({"error": "merchant, amount, category and payer are all required"}), 400
+
+    success = update_expense(expense_id, merchant, amount, category, payer)
+    if not success:
+        return jsonify({"error": "Expense not found"}), 404
+    return jsonify({"success": True})
