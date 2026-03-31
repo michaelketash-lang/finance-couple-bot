@@ -33,6 +33,7 @@ class _Ids:
     table: str = "expenses-table"
     edits_store: str = "expenses-edits-store"
     ids_store: str = "expenses-ids-store"
+    reference_store: str = "expenses-reference-store"
     edit_status: str = "expenses-edit-status"
     # Payer Summary
     payer_summary_div: str = "expenses-payer-summary"
@@ -83,6 +84,7 @@ def get_expenses_layout() -> dbc.Container:
         children=[
             dcc.Store(id=ids.edits_store, data={}, storage_type="memory"),
             dcc.Store(id=ids.ids_store, data=[], storage_type="memory"),
+            dcc.Store(id=ids.reference_store, data=[], storage_type="memory"),
 
             # --- ROW 1: CONTROLS ---
             dbc.Row(
@@ -245,6 +247,7 @@ def register_expenses_callbacks(app: Dash) -> None:
     @app.callback(
         Output(ids.table, "data"),
         Output(ids.ids_store, "data"),
+        Output(ids.reference_store, "data"),
         Input(ids.year_dropdown, "value"),
         Input(ids.month_tabs, "active_tab"),
         Input(ids.split_radio, "value"),
@@ -252,7 +255,7 @@ def register_expenses_callbacks(app: Dash) -> None:
     def _update_table(selected_year: int, active_month_str: str,
                       split_value: str):
         if not selected_year or not active_month_str:
-            return [], []
+            return [], [], []
 
         month = int(active_month_str)
         split_value = split_value or "shared"
@@ -262,9 +265,9 @@ def register_expenses_callbacks(app: Dash) -> None:
             df_month["date"] = df_month["date"].dt.strftime("%Y-%m-%d")
 
         records = df_month.to_dict("records")
-        # Store IDs as a plain list: [id_of_row0, id_of_row1, ...]
         row_ids = [r.get("id") for r in records]
-        return records, row_ids
+        # reference_store holds the same rows — it is the "server truth" we diff against
+        return records, row_ids, records
 
     # Callback 2: Update Charts and KPIs using Pandas aggregation
     @app.callback(
@@ -450,34 +453,54 @@ def register_expenses_callbacks(app: Dash) -> None:
     #   - If more than one row differs → it was a full table refresh (month
     #     switch) → skip silently. This is the key guard that prevents false saves.
     #   - prevent_initial_call=True ensures we don't fire on first page load.
+    # Callback 4: Save inline cell edits back to the database.
+    #
+    # Why reference_store instead of data_previous:
+    #   data_previous is set by Dash only on user-initiated table edits, and
+    #   its behaviour when a callback rewrites the table is inconsistent across
+    #   Dash versions. reference_store is a plain dcc.Store we control — it is
+    #   set to the exact same rows as the table every time _update_table fires,
+    #   giving us a reliable "server truth" snapshot to diff against.
+    #
+    # Flow:
+    #   - User edits a cell → table.data changes → this callback fires
+    #   - We diff table.data vs reference_store (the last server snapshot)
+    #   - Exactly one row differs  → user edit  → save to API → update reference
+    #   - Zero or many rows differ → table was just refreshed → skip silently
     @app.callback(
         Output(ids.edit_status, "children"),
-        Input(ids.table, "data_timestamp"),
-        State(ids.table, "data"),
-        State(ids.table, "data_previous"),
+        Output(ids.reference_store, "data", allow_duplicate=True),
+        Input(ids.table, "data"),
+        State(ids.reference_store, "data"),
         State(ids.ids_store, "data"),
         prevent_initial_call=True,
     )
-    def _save_inline_edit(_ts, current_data: list[dict],
-                          previous_data: list[dict], row_ids: list):
-        if not current_data or not previous_data or not row_ids:
-            return ""
+    def _save_inline_edit(current_data: list[dict],
+                          reference_data: list[dict], row_ids: list):
+        from dash import no_update
 
-        # Find the index of the single changed row
+        if not current_data or not reference_data or not row_ids:
+            return no_update, no_update
+
+        if len(current_data) != len(reference_data):
+            # Row count differs → full table refresh, update reference and skip
+            return no_update, current_data
+
         changed_indices = [
-            i for i, (curr, prev) in enumerate(zip(current_data, previous_data))
-            if curr != prev
+            i for i, (curr, ref) in enumerate(zip(current_data, reference_data))
+            if curr != ref
         ]
 
-        # More than one row changed → full table refresh, not a user edit
+        # Zero rows changed → nothing to do
+        # Many rows changed → full refresh (month switch), just sync reference
         if len(changed_indices) != 1:
-            return ""
+            return no_update, current_data
 
         row_index = changed_indices[0]
-        expense_id = row_ids[row_index]  # Look up ID from the store by position
+        expense_id = row_ids[row_index]
 
         if not expense_id:
-            return "Could not save: ID not found in store."
+            return "Could not save: ID not found.", no_update
 
         row = current_data[row_index]
         success = update_expense(
@@ -489,5 +512,9 @@ def register_expenses_callbacks(app: Dash) -> None:
         )
 
         if success:
-            return f"✓ {row.get('merchant', 'Row')} updated"
-        return "Failed to save — check the server logs."
+            # Update reference so the next edit diffs against the saved state
+            updated_reference = list(reference_data)
+            updated_reference[row_index] = row
+            return f"✓ {row.get('merchant', 'Row')} updated", updated_reference
+
+        return "Failed to save — check the server logs.", no_update
