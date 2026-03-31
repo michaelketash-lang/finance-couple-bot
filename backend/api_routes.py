@@ -15,7 +15,8 @@ from database_manager import (
     get_ai_context_data,
     get_all_budgets,
     get_raw_monthly_expenses, get_raw_yearly_expenses, get_yearly_summary,
-    get_spending_per_person_per_month, get_monthly_settlement, get_personal_monthly_totals
+    get_spending_per_person_per_month, get_monthly_settlement, get_personal_monthly_totals,
+    update_expense_category
 )
 
 api = Blueprint('api', __name__)
@@ -171,3 +172,15 @@ def api_yearly_summary():
     split = request.args.get('split')
     data = get_yearly_summary(year, split)
     return jsonify(data)
+
+@api.route('/expenses/<int:expense_id>/category', methods=['PUT'])
+def api_update_category(expense_id):
+    """Updates the category of a specific expense."""
+    data = request.get_json()
+    new_category = data.get('category')
+    if not new_category:
+        return jsonify({"error": "category is required"}), 400
+    success = update_expense_category(expense_id, new_category)
+    if not success:
+        return jsonify({"error": "Expense not found"}), 404
+    return jsonify({"message": "Category updated"})

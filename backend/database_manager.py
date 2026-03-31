@@ -615,10 +615,10 @@ def get_raw_monthly_expenses(year, month, split=None):
             month_filter = f"{year:04d}-{month:02d}%"
 
             if split:
-                sql = "SELECT merchant, amount, category, payer, split, strftime('%Y-%m-%d', created_at) as date FROM expenses WHERE created_at LIKE ? AND split = ?"
+                sql = "SELECT id, merchant, amount, category, payer, split, strftime('%Y-%m-%d', created_at) as date FROM expenses WHERE created_at LIKE ? AND split = ?"
                 cursor.execute(sql, (month_filter, split))
             else:
-                sql = "SELECT merchant, amount, category, payer, split, strftime('%Y-%m-%d', created_at) as date FROM expenses WHERE created_at LIKE ?"
+                sql = "SELECT id, merchant, amount, category, payer, split, strftime('%Y-%m-%d', created_at) as date FROM expenses WHERE created_at LIKE ?"
                 cursor.execute(sql, (month_filter,))
 
             rows = cursor.fetchall()
@@ -628,6 +628,22 @@ def get_raw_monthly_expenses(year, month, split=None):
     except sqlite3.Error as e:
         print(f"❌ Database Error in get_raw_monthly_expenses: {e}")
         return []
+
+
+def update_expense_category(expense_id, new_category):
+    """Updates the category of a specific expense by id."""
+    try:
+        with sqlite3.connect('finance_bot.db') as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "UPDATE expenses SET category = ? WHERE id = ?",
+                (new_category, expense_id)
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+    except sqlite3.Error as e:
+        print(f"❌ Database Error in update_expense_category: {e}")
+        return False
 
 
 def get_all_budgets():
