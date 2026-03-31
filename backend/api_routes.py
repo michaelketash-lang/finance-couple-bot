@@ -1,3 +1,4 @@
+import os
 import datetime
 from flask import Blueprint, request, jsonify
 from database_manager import (
@@ -153,6 +154,23 @@ def api_add_investment():
 def api_ai_insights():
     """Returns context data for AI financial analysis."""
     return jsonify(get_ai_context_data())
+
+@api.route('/insights/generate', methods=['POST'])
+def api_generate_insight():
+    """Triggers the AI insights agent. Protected by a secret token."""
+    from ai_insights import FinancialInsightsAgent
+
+    token = request.args.get('token')
+    if token != os.getenv('CRON_SECRET'):
+        return jsonify({"error": "Unauthorized"}), 401
+
+    today_ordinal = datetime.date.today().toordinal()
+    if today_ordinal % 3 != 0:
+        return jsonify({"message": "Not the 3rd day, skipping."}), 200
+
+    agent = FinancialInsightsAgent()
+    agent.generate_insight()
+    return jsonify({"message": "Insight generated successfully."})
 
 
 @api.route('/expenses/yearly/raw', methods=['GET'])
