@@ -164,13 +164,36 @@ def api_generate_insight():
     if token != os.getenv('CRON_SECRET'):
         return jsonify({"error": "Unauthorized"}), 401
 
-    today_ordinal = datetime.date.today().toordinal()
-    if today_ordinal % 3 != 0:
-        return jsonify({"message": "Not the 3rd day, skipping."}), 200
-
     agent = FinancialInsightsAgent()
     agent.generate_insight()
     return jsonify({"message": "Insight generated successfully."})
+
+
+@api.route('/gmail/renew-watch', methods=['POST'])
+def api_renew_gmail_watch():
+    """Renews the Gmail push notification watch for all users."""
+    from google.oauth2.credentials import Credentials
+    from googleapiclient.discovery import build
+
+    token = request.args.get('token')
+    if token != os.getenv('CRON_SECRET'):
+        return jsonify({"error": "Unauthorized"}), 401
+
+    project_id = os.getenv('GOOGLE_PROJECT_ID')
+    topic_name = f"projects/{project_id}/topics/gmail-notifications"
+    watch_request = {'labelIds': ['INBOX'], 'topicName': topic_name}
+
+    results = {}
+    for user in ['ori', 'michael']:
+        try:
+            creds = Credentials.from_authorized_user_file(f'token_{user}.json', ['https://www.googleapis.com/auth/gmail.readonly'])
+            service = build('gmail', 'v1', credentials=creds)
+            response = service.users().watch(userId='me', body=watch_request).execute()
+            results[user] = {"status": "ok", "expiration": response.get('expiration')}
+        except Exception as e:
+            results[user] = {"status": "error", "message": str(e)}
+
+    return jsonify(results)
 
 
 @api.route('/expenses/yearly/raw', methods=['GET'])
