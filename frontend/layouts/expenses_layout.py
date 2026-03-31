@@ -12,7 +12,8 @@ from components.charts import category_pie_chart, monthly_trends_bar_chart, \
     CATEGORIES
 from components.tables import expenses_datatable
 from api_client import fetch_raw_expenses, fetch_yearly_data, \
-    fetch_budget_pacing, fetch_settlement, fetch_personal_totals, update_expense
+    fetch_budget_pacing, fetch_settlement, fetch_personal_totals, \
+    fetch_spending_per_person, update_expense
 
 
 @dataclass(frozen=True)
@@ -98,10 +99,9 @@ def get_expenses_layout() -> dbc.Container:
                                     dbc.RadioItems(
                                         id=ids.split_radio,
                                         options=[
-                                            {"label": "Shared",
-                                             "value": "shared"},
-                                            {"label": "Personal",
-                                             "value": "personal"},
+                                            {"label": "Shared",  "value": "shared"},
+                                            {"label": "Michael", "value": "michael"},
+                                            {"label": "Ori",     "value": "ori"},
                                         ],
                                         value=default_split,
                                         inline=True,
@@ -260,13 +260,23 @@ def register_expenses_callbacks(app: Dash) -> None:
         month = int(active_month_str)
         split_value = split_value or "shared"
 
-        df_month = fetch_raw_expenses(selected_year, month, split_value)
+        if split_value == "shared":
+            df_month = fetch_raw_expenses(selected_year, month, "shared")
+        else:
+            # Michael / Ori → personal expenses filtered by payer
+            df_all_personal = fetch_raw_expenses(selected_year, month, "personal")
+            if not df_all_personal.empty:
+                df_month = df_all_personal[
+                    df_all_personal["payer"].str.lower() == split_value.lower()
+                ].reset_index(drop=True)
+            else:
+                df_month = df_all_personal
+
         if not df_month.empty and "date" in df_month.columns:
             df_month["date"] = df_month["date"].dt.strftime("%Y-%m-%d")
 
         records = df_month.to_dict("records")
         row_ids = [r.get("id") for r in records]
-        # reference_store holds the same rows — it is the "server truth" we diff against
         return records, row_ids, records
 
     # Callback 2: Update Charts and KPIs using Pandas aggregation
@@ -289,56 +299,100 @@ def register_expenses_callbacks(app: Dash) -> None:
 
         split_value = split_value or "shared"
         month = int(active_month_str)
+        is_person_view = split_value in ("michael", "ori")
 
-        # 1. Fetch entire year in one fast call
-        yearly_df = fetch_yearly_data(selected_year, split_value)
+        # 1. Build the yearly DataFrame used by both charts
+        #
+        #    Shared view → fetch shared data only (unchanged)
+        #
+        #    Person view → combine two sources so the charts match the KPI:
+        #      a) Personal expenses for this person (full amount — 100% theirs)
+        #      b) ALL shared expenses halved (÷2) — their fair share regardless
+        #         of who physically paid
+        #    Concatenating both gives the complete financial picture per month/category.
+        if is_person_view:
+            df_personal = fetch_yearly_data(selected_year, "personal")
+            if not df_personal.empty:
+                df_personal = df_personal[
+                    df_personal["payer"].str.lower() == split_value.lower()
+                ].copy()
 
-        # 2. Monthly Trend Data Aggregation
+            df_shared = fetch_yearly_data(selected_year, "shared")
+            if not df_shared.empty:
+                df_shared = df_shared.copy()
+                df_shared["amount"] = df_shared["amount"] / 2.0
+
+            yearly_df = pd.concat(
+                [df for df in [df_personal, df_shared] if not df.empty],
+                ignore_index=True,
+            )
+        else:
+            yearly_df = fetch_yearly_data(selected_year, "shared")
+
+        # 2. Monthly trend aggregation
         trend_summary = {}
         if not yearly_df.empty:
-            yearly_df['month_num'] = yearly_df['date'].dt.strftime('%m')
-            monthly_sums = yearly_df.groupby('month_num')['amount'].sum()
-            trend_summary = monthly_sums.to_dict()  # e.g., {'01': 500, '02': 1200}
+            yearly_df["month_num"] = yearly_df["date"].dt.strftime("%m")
+            monthly_sums = yearly_df.groupby("month_num")["amount"].sum()
+            trend_summary = monthly_sums.to_dict()
 
         trends_fig = monthly_trends_bar_chart(summary_dict=trend_summary,
                                               year=selected_year)
 
-        # 3. Pie Chart Data (Use table data if available, else filter yearly_df for the month)
-        if table_data:
-            df_pie = pd.DataFrame(table_data)
-        else:
+        # 3. Pie chart
+        #    Shared view → use table_data as before (already filtered to shared)
+        #    Person view → use combined yearly data filtered to the selected month
+        #                  so the pie reflects personal + shared/2 (not just personal)
+        if is_person_view:
             if not yearly_df.empty:
-                df_pie = yearly_df[yearly_df['date'].dt.month == month]
+                df_pie = yearly_df[yearly_df["date"].dt.month == month].copy()
             else:
                 df_pie = pd.DataFrame()
+        else:
+            if table_data:
+                df_pie = pd.DataFrame(table_data)
+            else:
+                if not yearly_df.empty:
+                    df_pie = yearly_df[yearly_df["date"].dt.month == month]
+                else:
+                    df_pie = pd.DataFrame()
 
         pie_fig = category_pie_chart(df=df_pie)
 
-        # 4. KPIs
+        # 4. Total Spent KPI
+        #    Shared → sum from trend (same as before)
+        #    Michael/Ori → net total burden: personal + half of all shared
         month_str_padded = f"{month:02d}"
-        total_spent = float(trend_summary.get(month_str_padded, 0.0))
+        if is_person_view:
+            burdens = fetch_spending_per_person(selected_year, month)
+            # Match by capitalising the first letter (DB stores "Michael"/"Ori")
+            person_key = split_value.capitalize()
+            total_spent = float(burdens.get(person_key, 0.0))
+        else:
+            total_spent = float(trend_summary.get(month_str_padded, 0.0))
         text_spent = f"₪{total_spent:,.0f}"
 
-        # Budget Pacing
-        pacing_data = fetch_budget_pacing(selected_year, month)
-        pacing_status = pacing_data.get("status", "On Track")
-        pacing_amount = pacing_data.get("amount", 0.0)
-
-        text_pacing = f"₪{pacing_amount:,.0f}"
-        if pacing_status == "Over Budget":
-            pacing_class = "text-danger fw-bold mb-0"
-            text_pacing = f"{pacing_status} (₪{pacing_amount:,.0f})"
-        elif pacing_status == "No Budget Set":
+        # 5. Budget Pacing — only meaningful for shared view
+        if is_person_view:
+            text_pacing = "—"
             pacing_class = "text-muted fw-bold mb-0"
-            text_pacing = "No Budget"
         else:
-            pacing_class = "text-info fw-bold mb-0"
+            pacing_data = fetch_budget_pacing(selected_year, month)
+            pacing_status = pacing_data.get("status", "On Track")
+            pacing_amount = pacing_data.get("amount", 0.0)
+            text_pacing = f"₪{pacing_amount:,.0f}"
+            if pacing_status == "Over Budget":
+                pacing_class = "text-danger fw-bold mb-0"
+                text_pacing = f"{pacing_status} (₪{pacing_amount:,.0f})"
+            elif pacing_status == "No Budget Set":
+                pacing_class = "text-muted fw-bold mb-0"
+                text_pacing = "No Budget"
+            else:
+                pacing_class = "text-info fw-bold mb-0"
 
-        # Monthly Average
-        historical_trend = list(trend_summary.values())
-        non_zero_months = [float(v) for v in historical_trend if float(v) > 0]
-        avg_monthly = float(sum(non_zero_months) / len(
-            non_zero_months)) if non_zero_months else 0.0
+        # 6. Monthly Average — from the filtered trend
+        non_zero_months = [float(v) for v in trend_summary.values() if float(v) > 0]
+        avg_monthly = float(sum(non_zero_months) / len(non_zero_months)) if non_zero_months else 0.0
         text_average = f"₪{avg_monthly:,.0f}"
 
         return pie_fig, trends_fig, text_spent, text_pacing, pacing_class, text_average

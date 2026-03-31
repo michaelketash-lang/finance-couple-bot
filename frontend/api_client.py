@@ -142,6 +142,23 @@ def update_expense(expense_id: int, merchant: str, amount: float,
         return False
 
 
+def fetch_spending_per_person(year: int, month: int) -> dict:
+    """
+    Fetches the total financial burden per person for a given month.
+    Each person's burden = their personal expenses + half of all shared expenses.
+    Returns {payer: total}, e.g. {'Michael': 620.0, 'Ori': 500.0}.
+    """
+    url = f"{BASE_URL}/expenses/per-person?year={year}&month={month}"
+    try:
+        response = session.get(url)
+        response.raise_for_status()
+        data = response.json()
+        return {k: float(v) for k, v in data.get("spending", {}).items()}
+    except Exception as e:
+        print(f"Error fetching spending per person: {e}")
+        return {}
+
+
 def fetch_settlement(year: int, month: int) -> dict:
     """
     Fetches the monthly settlement result.
