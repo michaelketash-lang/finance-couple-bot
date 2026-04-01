@@ -258,7 +258,12 @@ def api_export_to_sheets():
     if not spreadsheet_id:
         return jsonify({"error": "SHEETS_SPREADSHEET_ID not set"}), 500
 
-    rows = get_raw_monthly_expenses(year, month, split)
+    if split in ('michael', 'ori'):
+        rows = get_raw_monthly_expenses(year, month, 'personal')
+        rows = [r for r in rows if r.get('payer', '').lower() == split.lower()]
+    else:
+        rows = get_raw_monthly_expenses(year, month, split)
+
     if not rows:
         return jsonify({"error": "No data for this month"}), 404
 
