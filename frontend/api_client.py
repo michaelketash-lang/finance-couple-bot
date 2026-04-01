@@ -203,3 +203,15 @@ def fetch_budget_pacing(year: int, month: int) -> dict:
     except Exception as e:
         print(f"Error fetching budget pacing: {e}")
         return {"status": "Error", "amount": 0.0}
+
+
+def export_to_sheets(year: int, month: int, split: str) -> dict:
+    """Exports the current month's transactions to Google Sheets."""
+    url = f"{BASE_URL}/expenses/export-sheets"
+    try:
+        response = session.post(url, json={"year": year, "month": month, "split": split})
+        response.raise_for_status()
+        return response.json()
+    except Exception as e:
+        print(f"Error exporting to sheets: {e}")
+        return {"error": str(e)}

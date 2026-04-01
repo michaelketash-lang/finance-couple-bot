@@ -19,6 +19,8 @@ from database_manager import (
     get_spending_per_person_per_month, get_monthly_settlement, get_personal_monthly_totals,
     update_expense_category, update_expense
 )
+import gspread
+import calendar
 
 api = Blueprint('api', __name__)
 
@@ -243,3 +245,53 @@ def api_update_expense(expense_id):
     if not success:
         return jsonify({"error": "Expense not found"}), 404
     return jsonify({"success": True})
+
+
+@api.route('/expenses/export-sheets', methods=['POST'])
+def api_export_to_sheets():
+    data = request.get_json()
+    year = int(data.get('year'))
+    month = int(data.get('month'))
+    split = data.get('split', 'shared')
+
+    spreadsheet_id = os.getenv('SHEETS_SPREADSHEET_ID')
+    if not spreadsheet_id:
+        return jsonify({"error": "SHEETS_SPREADSHEET_ID not set"}), 500
+
+    rows = get_raw_monthly_expenses(year, month, split)
+    if not rows:
+        return jsonify({"error": "No data for this month"}), 404
+
+    tab_name = f"{calendar.month_abbr[month]} {year} ({split})"
+
+    try:
+        gc = gspread.service_account(filename='service_account.json')
+        spreadsheet = gc.open_by_key(spreadsheet_id)
+
+        try:
+            existing = spreadsheet.worksheet(tab_name)
+            spreadsheet.del_worksheet(existing)
+        except gspread.exceptions.WorksheetNotFound:
+            pass
+
+        ws = spreadsheet.add_worksheet(title=tab_name, rows=len(rows) + 5, cols=10)
+
+        headers = ["ID", "Date", "Merchant", "Amount (₪)", "Category", "Payer", "Split"]
+        ws.append_row(headers)
+
+        for row in rows:
+            ws.append_row([
+                row.get("id", ""),
+                row.get("date", ""),
+                row.get("merchant", ""),
+                row.get("amount", 0),
+                row.get("category", ""),
+                row.get("payer", ""),
+                row.get("split", ""),
+            ])
+
+        sheet_url = f"https://docs.google.com/spreadsheets/d/{spreadsheet_id}"
+        return jsonify({"success": True, "url": sheet_url, "tab": tab_name, "rows": len(rows)})
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500

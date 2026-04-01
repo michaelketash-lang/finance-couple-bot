@@ -13,7 +13,7 @@ from components.charts import category_pie_chart, monthly_trends_bar_chart, \
 from components.tables import expenses_datatable
 from api_client import fetch_raw_expenses, fetch_yearly_data, \
     fetch_budget_pacing, fetch_settlement, fetch_personal_totals, \
-    fetch_spending_per_person, update_expense
+    fetch_spending_per_person, update_expense, export_to_sheets
 
 
 @dataclass(frozen=True)
@@ -124,6 +124,8 @@ def get_expenses_layout() -> dbc.Container:
                                         id=ids.export_btn,
                                         color="primary",
                                     ),
+                                    html.Div(id="export-status", className="ms-3 fw-medium",
+                                             style={"fontSize": "0.875rem"}),
                                 ],
                                 className="d-flex align-items-center bg-white p-3 rounded shadow-sm w-100",
                             )
@@ -572,3 +574,29 @@ def register_expenses_callbacks(app: Dash) -> None:
             return f"✓ {row.get('merchant', 'Row')} updated", updated_reference
 
         return "Failed to save — check the server logs.", no_update
+
+    @app.callback(
+        Output("export-status", "children"),
+        Output("export-status", "style"),
+        Input(ids.export_btn, "n_clicks"),
+        State(ids.year_dropdown, "value"),
+        State(ids.month_tabs, "active_tab"),
+        State(ids.split_radio, "value"),
+        prevent_initial_call=True,
+    )
+    def _export_to_sheets(n_clicks, year, active_month, split):
+        from dash import no_update
+        if not n_clicks:
+            return no_update, no_update
+
+        result = export_to_sheets(year=year, month=int(active_month), split=split or "shared")
+
+        if "error" in result:
+            return f"Export failed: {result['error']}", {"fontSize": "0.875rem", "color": "red"}
+
+        url = result.get("url", "")
+        tab = result.get("tab", "")
+        rows = result.get("rows", 0)
+        link = html.A(f"Open Sheet ({rows} rows → {tab})", href=url, target="_blank",
+                      className="ms-1 text-success fw-medium")
+        return ["✓ Exported! ", link], {"fontSize": "0.875rem"}
