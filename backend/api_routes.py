@@ -294,4 +294,5 @@ def api_export_to_sheets():
         return jsonify({"success": True, "url": sheet_url, "tab": tab_name, "rows": len(rows)})
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        import traceback
+        return jsonify({"error": str(e), "type": type(e).__name__, "detail": traceback.format_exc()}), 500
