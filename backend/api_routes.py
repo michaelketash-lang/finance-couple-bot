@@ -186,7 +186,7 @@ def api_renew_gmail_watch():
     watch_request = {'labelIds': ['INBOX'], 'topicName': topic_name}
 
     results = {}
-    for user in ['ori', 'michael']:
+    for user in [os.getenv('PAYER_1', 'Michael').lower(), os.getenv('PAYER_2', 'Ori').lower()]:
         try:
             creds = Credentials.from_authorized_user_file(f'token_{user}.json', ['https://www.googleapis.com/auth/gmail.readonly'])
             service = build('gmail', 'v1', credentials=creds)
@@ -258,7 +258,9 @@ def api_export_to_sheets():
     if not spreadsheet_id:
         return jsonify({"error": "SHEETS_SPREADSHEET_ID not set"}), 500
 
-    if split in ('michael', 'ori'):
+    payer_1 = os.getenv('PAYER_1', 'Michael').lower()
+    payer_2 = os.getenv('PAYER_2', 'Ori').lower()
+    if split in (payer_1, payer_2):
         rows = get_raw_monthly_expenses(year, month, 'personal')
         rows = [r for r in rows if r.get('payer', '').lower() == split.lower()]
     else:

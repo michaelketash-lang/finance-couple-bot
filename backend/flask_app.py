@@ -12,8 +12,8 @@ import json
 from gmail_processor import GmailProcessor
 
 USER_EMAILS = {
-    "michael.ketash@gmail.com": "michael",  # Use your real email
-    "orimac11@gmail.com": "ori"  # Use Ori's real email
+    os.getenv('PAYER_1_EMAIL', 'michael.ketash@gmail.com'): os.getenv('PAYER_1', 'Michael').lower(),
+    os.getenv('PAYER_2_EMAIL', 'orimac11@gmail.com'): os.getenv('PAYER_2', 'Ori').lower(),
 }
 # Load environment variables from .env file
 load_dotenv()

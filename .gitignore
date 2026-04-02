@@ -7,7 +7,8 @@ token_*.json
 /backend/service_account.json
 # --- Environment Variables ---
 .env
-
+.env.txt
+/frontend/.env.txt
 # --- Databases ---
 *.db
 *.db-journal

@@ -3,6 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 import calendar
+import os
+
+PAYER_1 = os.getenv('PAYER_1', 'Michael')
+PAYER_2 = os.getenv('PAYER_2', 'Ori')
 
 import pandas as pd
 import dash_bootstrap_components as dbc
@@ -99,9 +103,9 @@ def get_expenses_layout() -> dbc.Container:
                                     dbc.RadioItems(
                                         id=ids.split_radio,
                                         options=[
-                                            {"label": "Shared",  "value": "shared"},
-                                            {"label": "Michael", "value": "michael"},
-                                            {"label": "Ori",     "value": "ori"},
+                                            {"label": "Shared",        "value": "shared"},
+                                            {"label": PAYER_1,         "value": PAYER_1.lower()},
+                                            {"label": PAYER_2,         "value": PAYER_2.lower()},
                                         ],
                                         value=default_split,
                                         inline=True,
