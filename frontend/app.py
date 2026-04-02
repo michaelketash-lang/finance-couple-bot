@@ -1,10 +1,16 @@
 from __future__ import annotations
 
+import os
+
 from dash import Dash, Input, Output, html
 import dash_bootstrap_components as dbc
 
 from layouts.budget_layout import get_budget_layout, register_budget_callbacks
-from layouts.expenses_layout import get_expenses_layout, register_expenses_callbacks
+from layouts.expenses_layout import get_expenses_layout
+from layouts.expenses_callbacks import register_expenses_callbacks
+
+PAYER_1 = os.getenv('PAYER_1', 'Michael')
+PAYER_2 = os.getenv('PAYER_2', 'Ori')
 
 
 def _investments_placeholder() -> html.Div:
@@ -31,8 +37,8 @@ app.layout = html.Div(
             className="p-4",  # Added padding around the whole dashboard
             children=[
                 html.H2(
-                    "Michael & Partner Finance Dashboard",
-                    className="text-start my-4",  # Aligned left instead of center
+                    f"{PAYER_1} & {PAYER_2} Finance Dashboard",
+                    className="text-start my-4",
                 ),
                 dbc.Tabs(
                     [

@@ -69,10 +69,7 @@ def category_pie_chart(df: pd.DataFrame = None,
         if amt > 0:
             values.append(amt)
             colors.append(CATEGORY_COLORS.get(cat, "#cccccc"))
-            if amt > 0:  # Check later to only show text > 5% total_spent
-                text_info.append(f"₪{amt:,.0f}")
-            else:
-                text_info.append("")
+            text_info.append(f"₪{amt:,.0f}")
         else:
             values.append(0.0)
             colors.append(
