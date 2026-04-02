@@ -42,7 +42,6 @@ typing-inspection==0.4.2
 typing_extensions==4.15.0
 urllib3==2.6.3
 Werkzeug==3.1.6
-pdfplumber
-google-api-python-client
-google-auth-httplib2
-google-auth-oauthlib
+pdfplumber==0.11.9
+google-api-python-client==2.193.0
+google-auth-httplib2==0.3.0
