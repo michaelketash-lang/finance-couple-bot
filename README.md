@@ -77,6 +77,10 @@ OPENAI_API_KEY=
 GOOGLE_PROJECT_ID=
 SHEETS_SPREADSHEET_ID=
 CRON_SECRET=
+PAYER_1=YourName
+PAYER_2=PartnerName
+PAYER_1_EMAIL=your@gmail.com
+PAYER_2_EMAIL=partner@gmail.com
 ```
 
 Run locally:
@@ -91,6 +95,16 @@ cd frontend
 pip install -r requirements.txt
 python app.py
 ```
+
+## Deploy Your Own
+
+This project is fully configurable — anyone can run their own instance for their couple.
+
+1. Fork this repo on GitHub
+2. Set up your own PythonAnywhere (backend) and Render (frontend) accounts
+3. Set your `.env` variables with your own names, emails, and API keys
+4. Run `gmail_setup.py` to authorize Gmail access for both accounts
+5. Upload your `service_account.json` to PythonAnywhere
 
 ## Live Demo
 
