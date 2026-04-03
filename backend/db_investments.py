@@ -1,8 +1,27 @@
+"""
+db_investments.py
+=================
+
+Data-access functions for the ``investments`` table.
+
+Handles writing investment holdings (stocks, bonds, cash, pension, etc.)
+to the database.
+"""
+
 import sqlite3
 
 
-def add_investment(category, amount, name, ticker, expense_ratio):
-    """Adds a new investment record to the database."""
+def add_investment(category: str, amount: float, name: str,
+                   ticker: str | None, expense_ratio: float | None) -> bool:
+    """Insert a new investment record into the database.
+
+    :param category: Asset class (e.g. ``'stocks'``, ``'bonds'``, ``'pension'``).
+    :param amount: Current value of the holding in ILS.
+    :param name: Descriptive name of the investment (e.g. fund name).
+    :param ticker: Optional ticker symbol (e.g. ``'VOO'``).
+    :param expense_ratio: Optional annual expense ratio as a decimal (e.g. ``0.003``).
+    :returns: ``True`` on success, ``False`` on validation or database error.
+    """
     try:
         with sqlite3.connect('finance_bot.db') as conn:
             cursor = conn.cursor()

@@ -1,3 +1,15 @@
+"""
+gmail_setup.py
+==============
+
+One-time CLI script for setting up Gmail OAuth credentials and registering
+a Pub/Sub push notification watch for a given user.
+
+Run this locally for each user (michael or ori) to generate their
+``token_{username}.json`` file and activate Gmail push notifications.
+The watch expires every 7 days and must be renewed via ``/api/gmail/renew-watch``.
+"""
+
 import os
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
@@ -5,16 +17,20 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from dotenv import load_dotenv
 
-# Load environment variables
 load_dotenv()
 
-# We only need read-only access to fetch the emails/attachments
+# Read-only scope is sufficient for fetching emails and attachments
 SCOPES = ['https://www.googleapis.com/auth/gmail.readonly']
 PROJECT_ID = os.getenv("GOOGLE_PROJECT_ID")
 TOPIC_NAME = f"projects/{PROJECT_ID}/topics/gmail-notifications"
 
-def main():
-    # --- 1. Validation Checks ---
+
+def main() -> None:
+    """Authenticate a user with Gmail and register a Pub/Sub inbox watch.
+
+    Prompts for a username, handles OAuth token creation or refresh,
+    and calls the Gmail watch API to enable push notifications.
+    """
     if not PROJECT_ID:
         print("❌ ERROR: GOOGLE_PROJECT_ID is missing from your .env file.")
         return
@@ -23,7 +39,6 @@ def main():
         print("❌ ERROR: credentials.json not found in the project directory.")
         return
 
-    # --- 2. Dynamic User Setup ---
     user_name = input("Enter the user's name (michael or ori): ").strip().lower()
     token_filename = f'token_{user_name}.json'
 
@@ -35,18 +50,16 @@ def main():
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
+            # Launch a local browser flow to obtain a fresh token
             flow = InstalledAppFlow.from_client_secrets_file('credentials.json', SCOPES)
             creds = flow.run_local_server(port=0)
 
         with open(token_filename, 'w') as token:
             token.write(creds.to_json())
 
-    # --- 3. Establishing the Watch ---
     try:
-        # Build the Gmail service
         service = build('gmail', 'v1', credentials=creds)
 
-        # Tell Gmail where to push notifications
         watch_request = {
             'labelIds': ['INBOX'],
             'topicName': TOPIC_NAME
@@ -60,6 +73,7 @@ def main():
 
     except Exception as error:
         print(f"❌ API ERROR: Failed to establish watch: {error}")
+
 
 if __name__ == '__main__':
     main()
