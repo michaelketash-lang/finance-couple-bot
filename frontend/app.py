@@ -8,7 +8,8 @@ import dash_bootstrap_components as dbc
 from layouts.budget_layout import get_budget_layout, register_budget_callbacks
 from layouts.expenses_layout import get_expenses_layout
 from layouts.expenses_callbacks import register_expenses_callbacks
-from layouts.investments_layout import get_investments_layout, register_investments_callbacks
+from layouts.investments_layout import get_investments_layout
+from layouts.investments_callbacks import register_investments_callbacks
 
 PAYER_1 = os.getenv('PAYER_1', 'Michael')
 PAYER_2 = os.getenv('PAYER_2', 'Ori')
