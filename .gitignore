@@ -13,7 +13,8 @@ token_*.json
 *.db
 *.db-journal
 *.sqlite3
-
+finance_bot.db
+/backend/finance_bot.db
 # --- Python ---
 __pycache__/
 *.py[cod]

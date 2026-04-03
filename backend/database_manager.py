@@ -21,7 +21,13 @@ from db_budgets import (
     get_all_budgets,
     check_total_pacing,
 )
-from db_investments import add_investment
+from db_investments import (
+    add_investment,
+    add_to_pot,
+    log_new_investment,
+    get_pot_balance,
+    get_investments_summary,
+)
 from db_insights import get_ai_context_data
 
 
@@ -55,6 +61,14 @@ def setup_database():
                                         name TEXT,
                                         ticker TEXT DEFAULT NULL,
                                         expense_ratio REAL DEFAULT NULL
+                                        )
+                                    ''')
+
+    cursor.execute('''CREATE TABLE IF NOT EXISTS pot_transactions (
+                                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                                        amount REAL NOT NULL,
+                                        note TEXT,
+                                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                                         )
                                     ''')
 

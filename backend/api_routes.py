@@ -5,6 +5,9 @@ from database_manager import (
     add_expense,
     set_category_budget,
     add_investment,
+    add_to_pot,
+    log_new_investment,
+    get_investments_summary,
     get_total_monthly_expenses,
     get_average_total_monthly_expenses,
     get_monthly_expenses_by_category,
@@ -139,7 +142,7 @@ def api_budget_pacing():
 
 @api.route('/investments', methods=['POST'])
 def api_add_investment():
-    """Adds a new investment record."""
+    """Adds a new investment record (legacy, no pot deduction)."""
     data = request.json
     success = add_investment(
         category=data['category'],
@@ -147,6 +150,42 @@ def api_add_investment():
         name=data['name'],
         ticker=data.get('ticker'),
         expense_ratio=data.get('expense_ratio')
+    )
+    return jsonify({"success": success})
+
+
+@api.route('/investments/summary', methods=['GET'])
+def api_investments_summary():
+    """Returns total_invested, pot_balance, net_worth, and allocation by category."""
+    return jsonify(get_investments_summary())
+
+
+@api.route('/investments/add-funds', methods=['POST'])
+def api_add_funds_to_pot():
+    """Adds funds to The Pot (available cash to invest)."""
+    data = request.json
+    amount = data.get('amount')
+    if not amount or float(amount) <= 0:
+        return jsonify({"error": "amount must be a positive number"}), 400
+    success = add_to_pot(amount=float(amount), note=data.get('note'))
+    return jsonify({"success": success})
+
+
+@api.route('/investments/new', methods=['POST'])
+def api_log_new_investment():
+    """Logs a new investment and deducts the amount from The Pot atomically."""
+    data = request.json
+    category = data.get('category')
+    amount = data.get('amount')
+    name = data.get('name')
+    if not all([category, amount, name]):
+        return jsonify({"error": "category, amount, and name are required"}), 400
+    success = log_new_investment(
+        category=category,
+        amount=float(amount),
+        name=name,
+        ticker=data.get('ticker'),
+        expense_ratio=data.get('expense_ratio'),
     )
     return jsonify({"success": success})
 

@@ -205,6 +205,52 @@ def fetch_budget_pacing(year: int, month: int) -> dict:
         return {"status": "Error", "amount": 0.0}
 
 
+def fetch_investments_summary() -> dict:
+    """
+    Fetches the full investments summary: net worth, total invested, pot balance,
+    and allocation breakdown by category.
+    """
+    url = f"{BASE_URL}/investments/summary"
+    try:
+        response = session.get(url)
+        response.raise_for_status()
+        return response.json()
+    except Exception as e:
+        print(f"Error fetching investments summary: {e}")
+        return {'total_invested': 0.0, 'pot_balance': 0.0, 'net_worth': 0.0, 'allocation': {}}
+
+
+def add_funds_to_pot(amount: float, note: str = None) -> bool:
+    """Adds funds to The Pot (available cash to invest)."""
+    url = f"{BASE_URL}/investments/add-funds"
+    try:
+        response = session.post(url, json={"amount": amount, "note": note})
+        response.raise_for_status()
+        return response.json().get("success", False)
+    except Exception as e:
+        print(f"Error adding funds to pot: {e}")
+        return False
+
+
+def log_investment(category: str, amount: float, name: str,
+                   ticker: str = None, expense_ratio: float = None) -> bool:
+    """Logs a new investment and deducts from The Pot atomically."""
+    url = f"{BASE_URL}/investments/new"
+    try:
+        response = session.post(url, json={
+            "category": category,
+            "amount": amount,
+            "name": name,
+            "ticker": ticker,
+            "expense_ratio": expense_ratio,
+        })
+        response.raise_for_status()
+        return response.json().get("success", False)
+    except Exception as e:
+        print(f"Error logging investment: {e}")
+        return False
+
+
 def export_to_sheets(year: int, month: int, split: str) -> dict:
     """Exports the current month's transactions to Google Sheets."""
     url = f"{BASE_URL}/expenses/export-sheets"
