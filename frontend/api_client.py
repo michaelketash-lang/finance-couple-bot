@@ -205,6 +205,36 @@ def fetch_budget_pacing(year: int, month: int) -> dict:
         return {"status": "Error", "amount": 0.0}
 
 
+def fetch_dashboard_data(year: int, month: int) -> dict:
+    """
+    BFF endpoint — returns everything the Expenses tab needs in a single HTTP call:
+    raw monthly rows (expenses), full-year raw rows (yearly_raw), KPIs, and payer summary.
+    """
+    url = f"{BASE_URL}/bff/dashboard-data?year={year}&month={month}"
+    try:
+        response = session.get(url)
+        response.raise_for_status()
+        return response.json()
+    except Exception as e:
+        print(f"Error fetching dashboard data: {e}")
+        return {}
+
+
+def fetch_budget_bff(year: int, month: int) -> dict:
+    """
+    BFF endpoint — returns everything the Budget tab needs in a single HTTP call:
+    budget targets, per-category actuals (aggregated server-side), and pacing status.
+    """
+    url = f"{BASE_URL}/bff/budget-data?year={year}&month={month}"
+    try:
+        response = session.get(url)
+        response.raise_for_status()
+        return response.json()
+    except Exception as e:
+        print(f"Error fetching budget data: {e}")
+        return {}
+
+
 def export_to_sheets(year: int, month: int, split: str) -> dict:
     """Exports the current month's transactions to Google Sheets."""
     url = f"{BASE_URL}/expenses/export-sheets"

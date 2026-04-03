@@ -9,7 +9,7 @@ from dash import Dash, Input, Output, State, dcc, html
 
 from components.cards import budget_progress_card
 from components.tables import budgets_datatable
-from api_client import fetch_all_budgets, fetch_raw_expenses, save_category_budget, CATEGORIES
+from api_client import fetch_budget_bff, save_category_budget, CATEGORIES
 
 
 @dataclass(frozen=True)
@@ -179,26 +179,19 @@ def register_budget_callbacks(app: Dash) -> None:
 
         month = int(active_month_str)
 
-        # --- 1. Budget targets (what we planned to spend per category) ---
-        df_budgets = fetch_all_budgets()
+        # --- Single BFF call replaces fetch_all_budgets() + fetch_raw_expenses() ---
+        bff = fetch_budget_bff(selected_year, month)
 
-        # --- 2. All expenses for the selected month (shared + personal) ---
-        # split="" means the API returns every row regardless of split type,
-        # giving us the full picture of what was actually spent.
-        df_expenses = fetch_raw_expenses(selected_year, month, split="")
+        # --- 1. Budget targets ---
+        budgets_list = bff.get("budgets", [])
+        target_by_cat = {b["category"]: float(b["monthly_target"]) for b in budgets_list}
 
-        # --- 3. Actual spend per category ---
-        if not df_expenses.empty:
-            actual_by_cat = (
-                df_expenses.groupby("category")["amount"].sum().to_dict()
-            )
-        else:
-            actual_by_cat = {}
+        # --- 2. Category actuals (pre-aggregated by the BFF) ---
+        actual_by_cat = {k: float(v) for k, v in bff.get("category_actuals", {}).items()}
 
-        # --- 4. Merge targets with actuals, compute remaining ---
+        # --- 3. Merge targets with actuals, compute remaining ---
         # Always iterate over ALL categories so every row appears in the table,
         # even if no budget target has been saved yet (defaults to 0).
-        target_by_cat = dict(zip(df_budgets["category"], df_budgets["monthly_target"])) if not df_budgets.empty else {}
 
         table_rows = []
         for cat in CATEGORIES:

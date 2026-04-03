@@ -37,6 +37,8 @@ class _Ids:
     edit_status: str = "expenses-edit-status"
     # Payer Summary
     payer_summary_div: str = "expenses-payer-summary"
+    # BFF master store — holds all fetched data for the selected month
+    dashboard_store: str = "expenses-dashboard-store"
 
 
 def _create_kpi_card(title: str, id: str, color: str) -> dbc.Card:
@@ -78,6 +80,7 @@ def get_expenses_layout() -> dbc.Container:
     return dbc.Container(
         fluid=True,
         children=[
+            dcc.Store(id=ids.dashboard_store, data={}, storage_type="memory"),
             dcc.Store(id=ids.edits_store, data={}, storage_type="memory"),
             dcc.Store(id=ids.ids_store, data=[], storage_type="memory"),
             dcc.Store(id=ids.reference_store, data=[], storage_type="memory"),
