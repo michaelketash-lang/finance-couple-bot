@@ -205,12 +205,12 @@ def fetch_budget_pacing(year: int, month: int) -> dict:
         return {"status": "Error", "amount": 0.0}
 
 
-def fetch_investments_summary() -> dict:
+def fetch_investments_summary(payer: str) -> dict:
     """
-    Fetches the full investments summary: net worth, total invested, pot balance,
-    and allocation breakdown by category.
+    Fetches KPI summary for a specific payer: net worth, total invested,
+    pot balance, and allocation breakdown by category.
     """
-    url = f"{BASE_URL}/investments/summary"
+    url = f"{BASE_URL}/investments/summary?payer={payer}"
     try:
         response = session.get(url)
         response.raise_for_status()
@@ -220,11 +220,23 @@ def fetch_investments_summary() -> dict:
         return {'total_invested': 0.0, 'pot_balance': 0.0, 'net_worth': 0.0, 'allocation': {}}
 
 
-def add_funds_to_pot(amount: float, note: str = None) -> bool:
-    """Adds funds to The Pot (available cash to invest)."""
+def fetch_all_investments(payer: str) -> list:
+    """Fetches all investment records for a specific payer."""
+    url = f"{BASE_URL}/investments/all?payer={payer}"
+    try:
+        response = session.get(url)
+        response.raise_for_status()
+        return response.json()
+    except Exception as e:
+        print(f"Error fetching investments list: {e}")
+        return []
+
+
+def add_funds_to_pot(amount: float, payer: str, note: str = None) -> bool:
+    """Adds funds to a specific payer's Pot."""
     url = f"{BASE_URL}/investments/add-funds"
     try:
-        response = session.post(url, json={"amount": amount, "note": note})
+        response = session.post(url, json={"amount": amount, "payer": payer, "note": note})
         response.raise_for_status()
         return response.json().get("success", False)
     except Exception as e:
@@ -232,15 +244,16 @@ def add_funds_to_pot(amount: float, note: str = None) -> bool:
         return False
 
 
-def log_investment(category: str, amount: float, name: str,
+def log_investment(category: str, amount: float, name: str, payer: str,
                    ticker: str = None, expense_ratio: float = None) -> bool:
-    """Logs a new investment and deducts from The Pot atomically."""
+    """Logs a new investment and atomically deducts from the payer's Pot."""
     url = f"{BASE_URL}/investments/new"
     try:
         response = session.post(url, json={
             "category": category,
             "amount": amount,
             "name": name,
+            "payer": payer,
             "ticker": ticker,
             "expense_ratio": expense_ratio,
         })
@@ -248,6 +261,19 @@ def log_investment(category: str, amount: float, name: str,
         return response.json().get("success", False)
     except Exception as e:
         print(f"Error logging investment: {e}")
+        return False
+
+
+def update_investment_record(inv_id: int, amount: float, name: str,
+                             ticker: str = None) -> bool:
+    """Updates an existing investment's amount, name, and ticker."""
+    url = f"{BASE_URL}/investments/{inv_id}"
+    try:
+        response = session.put(url, json={"amount": amount, "name": name, "ticker": ticker})
+        response.raise_for_status()
+        return response.json().get("success", False)
+    except Exception as e:
+        print(f"Error updating investment {inv_id}: {e}")
         return False
 
 

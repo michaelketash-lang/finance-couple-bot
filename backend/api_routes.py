@@ -8,6 +8,8 @@ from database_manager import (
     add_to_pot,
     log_new_investment,
     get_investments_summary,
+    get_all_investments,
+    update_investment,
     get_total_monthly_expenses,
     get_average_total_monthly_expenses,
     get_monthly_expenses_by_category,
@@ -156,34 +158,64 @@ def api_add_investment():
 
 @api.route('/investments/summary', methods=['GET'])
 def api_investments_summary():
-    """Returns total_invested, pot_balance, net_worth, and allocation by category."""
-    return jsonify(get_investments_summary())
+    """Returns total_invested, pot_balance, net_worth, and allocation — filtered by payer."""
+    payer = request.args.get('payer', 'Michael')
+    return jsonify(get_investments_summary(payer))
+
+
+@api.route('/investments/all', methods=['GET'])
+def api_get_all_investments():
+    """Returns all investment records for a specific payer."""
+    payer = request.args.get('payer', 'Michael')
+    return jsonify(get_all_investments(payer))
+
+
+@api.route('/investments/<int:inv_id>', methods=['PUT'])
+def api_update_investment(inv_id):
+    """Updates an investment's amount, name, and ticker (no pot adjustment)."""
+    data = request.get_json()
+    amount = data.get('amount')
+    name = data.get('name')
+    if not all([amount is not None, name]):
+        return jsonify({"error": "amount and name are required"}), 400
+    success = update_investment(
+        inv_id=inv_id,
+        amount=float(amount),
+        name=name,
+        ticker=data.get('ticker'),
+    )
+    if not success:
+        return jsonify({"error": "Investment not found"}), 404
+    return jsonify({"success": True})
 
 
 @api.route('/investments/add-funds', methods=['POST'])
 def api_add_funds_to_pot():
-    """Adds funds to The Pot (available cash to invest)."""
+    """Adds funds to a specific payer's Pot."""
     data = request.json
     amount = data.get('amount')
+    payer = data.get('payer', 'Michael')
     if not amount or float(amount) <= 0:
         return jsonify({"error": "amount must be a positive number"}), 400
-    success = add_to_pot(amount=float(amount), note=data.get('note'))
+    success = add_to_pot(amount=float(amount), payer=payer, note=data.get('note'))
     return jsonify({"success": success})
 
 
 @api.route('/investments/new', methods=['POST'])
 def api_log_new_investment():
-    """Logs a new investment and deducts the amount from The Pot atomically."""
+    """Logs a new investment and atomically deducts from the payer's Pot."""
     data = request.json
     category = data.get('category')
     amount = data.get('amount')
     name = data.get('name')
+    payer = data.get('payer', 'Michael')
     if not all([category, amount, name]):
         return jsonify({"error": "category, amount, and name are required"}), 400
     success = log_new_investment(
         category=category,
         amount=float(amount),
         name=name,
+        payer=payer,
         ticker=data.get('ticker'),
         expense_ratio=data.get('expense_ratio'),
     )

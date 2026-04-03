@@ -27,12 +27,14 @@ from db_investments import (
     log_new_investment,
     get_pot_balance,
     get_investments_summary,
+    get_all_investments,
+    update_investment,
 )
 from db_insights import get_ai_context_data
 
 
 def setup_database():
-    """Initializes all database tables."""
+    """Initializes all database tables and runs any required column migrations."""
     connection = sqlite3.connect('finance_bot.db')
     cursor = connection.cursor()
 
@@ -79,6 +81,14 @@ def setup_database():
                                         isread BOOLEAN DEFAULT FALSE
                                         )
                                     ''')
+
+    # Migration: add payer column to investments and pot_transactions if not present.
+    # Safe to run every startup — the except silently skips if already exists.
+    for table in ('investments', 'pot_transactions'):
+        try:
+            cursor.execute(f"ALTER TABLE {table} ADD COLUMN payer TEXT")
+        except sqlite3.OperationalError:
+            pass  # Column already exists
 
     connection.commit()
     return True
