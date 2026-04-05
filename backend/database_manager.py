@@ -38,7 +38,15 @@ from db_budgets import (
     get_all_budgets,
     check_total_pacing,
 )
-from db_investments import add_investment
+from db_investments import (
+    add_investment,
+    add_to_pot,
+    log_new_investment,
+    get_pot_balance,
+    get_investments_summary,
+    get_all_investments,
+    update_investment,
+)
 from db_insights import get_ai_context_data
 
 
@@ -78,6 +86,14 @@ def setup_database() -> bool:
                                         )
                                     ''')
 
+    cursor.execute('''CREATE TABLE IF NOT EXISTS pot_transactions (
+                                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                                        amount REAL NOT NULL,
+                                        note TEXT,
+                                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                                        )
+                                    ''')
+
     cursor.execute('''CREATE TABLE IF NOT EXISTS ai_insights (
                                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                                         insight TEXT,
@@ -85,6 +101,14 @@ def setup_database() -> bool:
                                         isread BOOLEAN DEFAULT FALSE
                                         )
                                     ''')
+
+    # Migration: add payer column to investments and pot_transactions if not present.
+    # Safe to run every startup — the except silently skips if already exists.
+    for table in ('investments', 'pot_transactions'):
+        try:
+            cursor.execute(f"ALTER TABLE {table} ADD COLUMN payer TEXT")
+        except sqlite3.OperationalError:
+            pass  # Column already exists
 
     connection.commit()
     return True
