@@ -1,14 +1,36 @@
+"""
+db_insights.py
+==============
+
+Data-access function that assembles the financial context snapshot
+used as input for the AI insights agent.
+
+Queries the last 14 days of transactions and combines them with
+budget targets to produce a structured summary for the LLM.
+"""
+
 import sqlite3
 import datetime
 
 
-def get_ai_context_data():
-    """Gathers a financial snapshot of the last 14 days for the AI agent."""
+def get_ai_context_data() -> dict:
+    """Assemble a 14-day financial snapshot for the AI agent.
+
+    Fetches all expenses from the last 14 days, applies the personal/shared
+    split to calculate each person's actual cost, and pairs each category's
+    spending against its monthly budget target.
+
+    :returns: A dict with keys:
+
+              - ``timeframe`` — always ``"Last 14 Days"``.
+              - ``category_breakdown`` — list of ``{category, monthly_budget,
+                spent_last_14_days}`` dicts.
+              - ``recent_transactions`` — list of individual transaction dicts.
+    """
     fourteen_days_ago = (datetime.datetime.now() - datetime.timedelta(days=14)).strftime('%Y-%m-%d %H:%M:%S')
 
     category_breakdown = []
     recent_transactions = []
-
     try:
         with sqlite3.connect('finance_bot.db') as conn:
             conn.row_factory = sqlite3.Row
@@ -31,6 +53,7 @@ def get_ai_context_data():
                 cat = row['category']
                 amt = row['amount']
                 split = row['split']
+                # Each person bears half the cost for shared expenses
                 actual_cost = amt / 2.0 if split == 'shared' else amt
 
                 if cat in category_totals:

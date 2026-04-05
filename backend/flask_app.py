@@ -1,4 +1,20 @@
+"""
+flask_app.py
+============
+
+Main Flask application entry point for the finance bot backend.
+
+Sets up the Flask app, registers the ``api`` and ``bff`` Blueprints,
+initializes the Telegram bot, and defines three webhook endpoints:
+
+- ``/gmail-webhook`` — receives Gmail push notifications via Google Pub/Sub.
+- ``/webhook`` — receives card transaction alerts from external apps (e.g. MacroDroid).
+- ``/telegram`` — receives Telegram bot updates.
+"""
+
 import os
+import base64
+import json
 import telebot
 from flask import Flask, request, jsonify
 from flask_cors import CORS
@@ -9,22 +25,18 @@ from database_manager import setup_database
 from telegram_bot import send_transaction_ui, register_handlers
 from api_routes import api
 from bff_routes import bff
-import base64
-import json
 from gmail_processor import GmailProcessor
 
 USER_EMAILS = {
     os.getenv('PAYER_1_EMAIL', 'michael.ketash@gmail.com'): os.getenv('PAYER_1', 'Michael').lower(),
     os.getenv('PAYER_2_EMAIL', 'orimac11@gmail.com'): os.getenv('PAYER_2', 'Ori').lower(),
 }
-# Load environment variables from .env file
+
 load_dotenv()
 
-# Get credentials from environment
 TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
 MY_CHAT_ID = os.getenv('MY_CHAT_ID')
 
-# Initialize Bot and Flask app
 bot = telebot.TeleBot(TELEGRAM_TOKEN, threaded=False)
 app = Flask(__name__)
 CORS(app)
@@ -34,18 +46,20 @@ setup_database()
 processed_emails = set()
 register_handlers(bot)
 
-def process_text_and_notify(raw_text, payer, chat_id=MY_CHAT_ID):
+
+def process_text_and_notify(raw_text: str, payer: str, chat_id: str = MY_CHAT_ID) -> bool:
+    """Parse raw text with the AI and send a Telegram confirmation UI if an expense is detected.
+
+    :param raw_text: Raw text from an email, PDF, or card alert to classify.
+    :param payer: Name of the person who made the transaction.
+    :param chat_id: Telegram chat ID to send the UI to (defaults to ``MY_CHAT_ID``).
+    :returns: ``True`` if an expense was detected and the UI was sent, ``False`` otherwise.
     """
-    Orchestrates the AI parsing and Telegram notification logic.
-    Returns True if an expense was detected and notified, False otherwise.
-    """
-    # Layer 2 Filter: AI Classification
     enriched = parser_service.parse(raw_text)
 
     if not enriched.get('is_expense', False):
         return False
 
-    # Send the UI to the user for approval/categorization
     send_transaction_ui(
         bot=bot,
         chat_id=chat_id,
@@ -59,23 +73,27 @@ def process_text_and_notify(raw_text, payer, chat_id=MY_CHAT_ID):
 
 @app.route('/gmail-webhook', methods=['POST'])
 def handle_gmail_push():
+    """Receive and process a Gmail Pub/Sub push notification.
+
+    Decodes the base64 message payload, identifies which user's inbox
+    triggered the notification, fetches the latest email content, and
+    passes it to the AI parser if it hasn't been processed already.
+    """
     envelope = request.get_json()
     if not envelope: return "Bad Request", 400
 
     try:
-        # 1. Find out whose email triggered the webhook
         message = envelope.get('message', {})
         data_b64 = message.get('data')
         if not data_b64: return "OK", 200
 
+        # Pub/Sub wraps the payload in base64-encoded JSON
         data_json = json.loads(base64.b64decode(data_b64).decode('utf-8'))
         email_address = data_json.get('emailAddress', '').lower()
 
-        # 2. Match the email to Michael or Ori
         user_name = USER_EMAILS.get(email_address)
-        if not user_name: return "OK", 200  # Ignore emails not in our dict
+        if not user_name: return "OK", 200
 
-        # 3. Fire up the processor for that specific user
         engine = GmailProcessor(user_name)
         pdf_results = engine.get_latest_email_pdf_content()
 
@@ -85,9 +103,8 @@ def handle_gmail_push():
             msg_id = item.get('msg_id')
             if msg_id in processed_emails: continue
 
-            # Pass the user_name to your AI parser so the DB knows who paid
-            if process_text_and_notify(item['text'],
-                                       payer=user_name.capitalize()):
+            if process_text_and_notify(item['text'], payer=user_name.capitalize()):
+                # Track processed message IDs to avoid duplicate notifications
                 processed_emails.add(msg_id)
                 break
 
@@ -96,10 +113,13 @@ def handle_gmail_push():
         print(f"Webhook Error: {e}")
         return "Internal Error", 500
 
+
 @app.route('/webhook', methods=['POST'])
 def handle_card_app_alert():
-    """
-    Handles incoming transaction data from external card apps (e.g., MacroDroid).
+    """Receive a transaction alert from an external card app (e.g. MacroDroid).
+
+    Expects a JSON body with ``merchant``, ``amount``, and ``payer`` fields.
+    Passes the data through the AI parser for consistent naming and categorization.
     """
     data = request.json
     if not data:
@@ -109,7 +129,6 @@ def handle_card_app_alert():
     amount = data.get('amount', '0.0')
     payer = data.get('payer', 'Card_User')
 
-    # Re-run through AI to ensure consistent naming and categorization
     process_text_and_notify(f"{raw_merchant} {amount}", payer=payer)
 
     return jsonify({"status": "success"}), 200
@@ -117,8 +136,10 @@ def handle_card_app_alert():
 
 @app.route('/telegram', methods=['POST'])
 def handle_telegram_updates():
-    """
-    Essential entry point for Telegram bot updates on PythonAnywhere.
+    """Receive and dispatch a Telegram bot update.
+
+    Entry point for the Telegram webhook on PythonAnywhere.
+    Rejects non-JSON requests with a 403.
     """
     if request.headers.get('content-type') == 'application/json':
         json_string = request.get_data().decode('utf-8')

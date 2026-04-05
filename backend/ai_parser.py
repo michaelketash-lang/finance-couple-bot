@@ -1,3 +1,16 @@
+"""
+ai_parser.py
+============
+
+LLM-powered expense parser for extracting structured financial data from
+unstructured text (Hebrew PDFs, email bodies, or direct user messages).
+
+Uses OpenAI GPT-4o to classify each input as an expense or not, and to
+extract merchant name, amount, and category from the 10 predefined categories.
+
+Exposes a module-level singleton ``parser_service`` for use across the app.
+"""
+
 import os
 import json
 import logging
@@ -5,30 +18,33 @@ from typing import Dict, Any, Optional
 from openai import OpenAI
 from dotenv import load_dotenv
 
-# Set up logging for production monitoring
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
 class ExpenseAIParser:
-    """
-    A service class to handle financial data extraction using LLMs.
+    """Parse financial data from unstructured text using an LLM.
+
     Optimized for messy Hebrew PDF text and expense classification.
     """
 
-    # Model configuration
     MODEL_NAME = "gpt-4o"
-    SUPPORTED_CATEGORIES = ["Groceries","Eating Out", "Transport", "Utilities","Rent","Maintenance", "Shopping", "Health",
-                            "Leisure", "Other"]
+    SUPPORTED_CATEGORIES = ["Groceries", "Eating Out", "Transport", "Utilities", "Rent",
+                            "Maintenance", "Shopping", "Health", "Leisure", "Other"]
     DEFAULT_CURRENCY = "ILS"
 
-    def __init__(self):
+    def __init__(self) -> None:
+        """Initialize the parser and validate the OpenAI API key."""
         load_dotenv()
         self.api_key = self._get_api_key()
         self.client = OpenAI(api_key=self.api_key)
 
     def _get_api_key(self) -> str:
-        """Retrieves the OpenAI API key from environment variables."""
+        """Retrieve the OpenAI API key from environment variables.
+
+        :returns: The API key string.
+        :raises EnvironmentError: If ``OPENAI_API_KEY`` is not set.
+        """
         api_key = os.getenv("OPENAI_API_KEY")
         if not api_key:
             logger.error("OPENAI_API_KEY missing from environment.")
@@ -36,6 +52,11 @@ class ExpenseAIParser:
         return api_key
 
     def _get_system_prompt(self) -> str:
+        """Build the system prompt that defines extraction rules and category definitions.
+
+        :returns: A multi-line instruction string for the model, including
+                  all 10 category definitions and strict output rules.
+        """
         categories_desc = (
             "- Groceries: Supermarkets, Rami Levy, Shufersal, AM:PM, Victory, Local grocery stores.\n"
             "- Eating Out: Restaurants, Wolt, Ten Bis, Coffee shops, Bars, Pizza, Deliveries.\n"
@@ -70,28 +91,34 @@ class ExpenseAIParser:
         )
 
     def _clean_amount_value(self, raw_amount: Any) -> float:
-        """Utility to convert various AI outputs into a clean float."""
+        """Convert various AI amount outputs into a clean float.
+
+        :param raw_amount: Raw value from the AI response (may include currency symbols or commas).
+        :returns: A clean float, or ``0.0`` if conversion fails.
+        """
         try:
             if raw_amount is None:
                 return 0.0
-            # Remove currency symbols and commas, then convert to float
-            clean_str = str(raw_amount).replace('₪', '').replace(',',
-                                                                 '').strip()
+            # Strip shekel symbol and thousands separators before casting
+            clean_str = str(raw_amount).replace('₪', '').replace(',', '').strip()
             return float(clean_str)
         except (ValueError, TypeError):
             return 0.0
 
     def _fetch_completion(self, user_input: str) -> Optional[str]:
-        """Handles the API call to OpenAI."""
+        """Send the input text to OpenAI and return the raw JSON string response.
+
+        :param user_input: The raw text to analyze (email body, PDF text, or user message).
+        :returns: Raw JSON string from the model, or ``None`` if the API call fails.
+        """
         try:
             response = self.client.chat.completions.create(
                 model=self.MODEL_NAME,
                 messages=[
                     {"role": "system", "content": self._get_system_prompt()},
-                    {"role": "user",
-                     "content": f"Analyze this text: {user_input}"}
+                    {"role": "user", "content": f"Analyze this text: {user_input}"}
                 ],
-                response_format={"type": "json_object"}
+                response_format={"type": "json_object"}  # Forces valid JSON output from the model
             )
             return response.choices[0].message.content
         except Exception as e:
@@ -99,7 +126,12 @@ class ExpenseAIParser:
             return None
 
     def _sanitize_response(self, raw_json: Optional[str]) -> Dict[str, Any]:
-        """Parses the AI's JSON output and applies default values/logic."""
+        """Parse the AI's JSON output and apply safe defaults for missing or invalid fields.
+
+        :param raw_json: Raw JSON string returned by the model, or ``None`` on failure.
+        :returns: A dict with guaranteed keys: ``is_expense``, ``merchant``,
+                  ``amount``, ``category``, ``currency``.
+        """
         defaults = {
             "is_expense": False,
             "merchant": "Unknown",
@@ -113,26 +145,25 @@ class ExpenseAIParser:
 
         try:
             parsed = json.loads(raw_json)
-            # Ensure essential keys exist and amount is a valid float
             parsed["amount"] = self._clean_amount_value(parsed.get("amount"))
             parsed["is_expense"] = bool(parsed.get("is_expense", False))
-
-            # Merge parsed data with defaults to ensure all keys are present
+            # Merge with defaults so all keys are always present
             return {**defaults, **parsed}
-
         except json.JSONDecodeError:
             logger.warning("AI returned invalid JSON. Using fallback defaults.")
             return defaults
 
     def parse(self, input_text: str) -> Dict[str, Any]:
-        """
-        The main entry point.
-        Orchestrates fetching data from AI and sanitizing the result.
+        """Extract structured expense data from raw input text.
+
+        :param input_text: Raw text from an email, PDF, or direct user message.
+        :returns: A dict with keys ``is_expense``, ``merchant``, ``amount``,
+                  ``category``, and ``currency``.
         """
         logger.info(f"Parsing input (Length: {len(input_text)})")
         raw_output = self._fetch_completion(input_text)
         return self._sanitize_response(raw_output)
 
 
-# Global singleton instance
+# Global singleton — avoids re-initializing the OpenAI client on every request
 parser_service = ExpenseAIParser()

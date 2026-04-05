@@ -1,3 +1,13 @@
+"""
+components/tables.py
+====================
+
+Reusable Dash DataTable components for the finance bot frontend.
+
+Provides an editable expenses table and an editable budget targets table,
+both with consistent premium styling and conditional row coloring.
+"""
+
 from __future__ import annotations
 from dash import dash_table
 
@@ -6,16 +16,24 @@ def expenses_datatable(
         data: list[dict],
         categories: list[str],
         table_id: str,
-        **kwargs  # This magic keyword allows passing extra styling arguments!
+        **kwargs
 ):
-    """
-    Editable DataTable for manual corrections (expenses) with premium styling.
+    """Build an editable DataTable for displaying and correcting monthly expenses.
+
+    Columns: Date (read-only) | Merchant | Amount | Category (dropdown) | Payer.
+    Supports zebra striping, hover highlight, and category dropdown editing.
+
+    :param data: List of expense row dicts to populate the table.
+    :param categories: List of valid category strings for the dropdown column.
+    :param table_id: The Dash component ``id`` to assign to this table.
+    :param kwargs: Additional keyword arguments forwarded to ``dash_table.DataTable``.
+                   ``style_header`` and ``style_data_conditional`` can be overridden here.
+    :returns: A configured ``dash_table.DataTable`` component.
     """
     amount_format = {"specifier": ",.2f"}
 
-    # --- Premium Base Styling ---
     base_style_header = {
-        "backgroundColor": "#2c3e50",  # Dark elegant blue
+        "backgroundColor": "#2c3e50",
         "color": "white",
         "fontWeight": "bold",
         "textAlign": "left",
@@ -24,18 +42,15 @@ def expenses_datatable(
     }
 
     base_style_data_conditional = [
-        # Alternating row colors (Zebra stripes)
         {"if": {"row_index": "odd"}, "backgroundColor": "#f8fafc"},
         {"if": {"row_index": "even"}, "backgroundColor": "white"},
-        # Highlight row on hover or select
         {"if": {"state": "active"}, "backgroundColor": "#e2e8f0",
          "border": "1px solid #cbd5e1"}
     ]
 
-    # Extract dynamic styles if passed from layout, otherwise use base styles
+    # Allow callers to override header and row styles without replacing everything
     style_header = kwargs.pop("style_header", base_style_header)
-    style_data_conditional = kwargs.pop("style_data_conditional",
-                                        base_style_data_conditional)
+    style_data_conditional = kwargs.pop("style_data_conditional", base_style_data_conditional)
 
     return dash_table.DataTable(
         id=table_id,
@@ -62,8 +77,6 @@ def expenses_datatable(
         row_deletable=False,
         sort_action="native",
         page_size=10,
-
-        # --- Clean LTR Layout Styling ---
         style_table={"overflowX": "auto", "borderRadius": "8px",
                      "border": "1px solid #e2e8f0"},
         style_cell={
@@ -79,7 +92,7 @@ def expenses_datatable(
         style_data_conditional=style_data_conditional,
         dropdown={"category": {
             "options": [{"label": c, "value": c} for c in categories]}},
-        **kwargs  # Pass any remaining arguments safely
+        **kwargs
     )
 
 
@@ -88,34 +101,34 @@ def budgets_datatable(
         table_id: str,
         **kwargs
 ):
-    """
-    Editable DataTable for budget targets per category.
-    Columns: Category | Target (editable) | Actual (read-only) | Remaining (read-only).
-    Rows turn red when actual spend exceeds target, green when under budget.
+    """Build an editable DataTable for managing monthly budget targets per category.
+
+    Columns: Category (read-only) | Target ₪ (editable) | Actual ₪ | Remaining ₪.
+    Rows turn red when actual spend exceeds target and green when under budget.
+
+    :param data: List of budget row dicts with ``category``, ``monthly_target``,
+                 ``actual``, and ``remaining`` keys.
+    :param table_id: The Dash component ``id`` to assign to this table.
+    :param kwargs: Additional keyword arguments forwarded to ``dash_table.DataTable``.
+    :returns: A configured ``dash_table.DataTable`` component.
     """
     amount_format = {"specifier": ",.0f"}
 
     style_data_conditional = [
-        # Zebra stripes baseline
         {"if": {"row_index": "odd"}, "backgroundColor": "#f8fafc"},
         {"if": {"row_index": "even"}, "backgroundColor": "white"},
         # Over budget → red tint
         {
-            "if": {
-                "filter_query": "{remaining} < 0",
-            },
+            "if": {"filter_query": "{remaining} < 0"},
             "backgroundColor": "#fff5f5",
             "color": "#c53030",
         },
         # Under budget (target set and spend > 0) → green tint
         {
-            "if": {
-                "filter_query": "{remaining} > 0 && {actual} > 0",
-            },
+            "if": {"filter_query": "{remaining} > 0 && {actual} > 0"},
             "backgroundColor": "#f0fff4",
             "color": "#276749",
         },
-        # Highlight active cell
         {"if": {"state": "active"}, "backgroundColor": "#e2e8f0",
          "border": "1px solid #cbd5e1"},
     ]
@@ -124,11 +137,7 @@ def budgets_datatable(
         id=table_id,
         data=data,
         columns=[
-            {
-                "name": "Category",
-                "id": "category",
-                "editable": False,
-            },
+            {"name": "Category", "id": "category", "editable": False},
             {
                 "name": "Target ₪",
                 "id": "monthly_target",

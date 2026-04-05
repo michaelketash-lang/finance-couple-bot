@@ -1,3 +1,20 @@
+"""
+database_manager.py
+===================
+
+Central database module for the finance bot.
+
+Initializes all SQLite tables via ``setup_database()`` and re-exports
+every data-access function from the four ``db_*`` submodules, so the
+rest of the app only needs to import from this single module.
+
+Tables managed:
+    - ``expenses`` — individual transactions with merchant, amount, payer, split, and category.
+    - ``budgets`` — monthly targets per expense category.
+    - ``investments`` — investment holdings by asset class.
+    - ``ai_insights`` — AI-generated financial insights with read status.
+"""
+
 import sqlite3
 
 from db_expenses import (
@@ -33,8 +50,11 @@ from db_investments import (
 from db_insights import get_ai_context_data
 
 
-def setup_database():
-    """Initializes all database tables and runs any required column migrations."""
+def setup_database() -> bool:
+    """Create all required database tables if they do not already exist.
+
+    :returns: ``True`` on success.
+    """
     connection = sqlite3.connect('finance_bot.db')
     cursor = connection.cursor()
 
@@ -92,7 +112,6 @@ def setup_database():
 
     connection.commit()
     return True
-
 
 if __name__ == '__main__':
     setup_database()

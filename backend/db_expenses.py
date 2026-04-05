@@ -1,8 +1,26 @@
+"""
+db_expenses.py
+==============
+
+Data-access functions for the ``expenses`` table.
+
+Handles all expense reads and writes, including personal/shared split logic,
+per-person breakdowns, monthly settlement calculations, and yearly summaries.
+"""
+
 import sqlite3
 
 
-def add_expense(merchant, amount, payer, split, category):
-    """Adds a new expense to the database."""
+def add_expense(merchant: str, amount: float, payer: str, split: str, category: str) -> bool:
+    """Insert a new expense record into the database.
+
+    :param merchant: Name of the merchant or payee.
+    :param amount: Transaction amount in ILS.
+    :param payer: Name of the person who paid.
+    :param split: ``'shared'`` or ``'personal'``.
+    :param category: Expense category (must match the table constraint).
+    :returns: ``True`` on success, ``False`` on validation or database error.
+    """
     try:
         with sqlite3.connect('finance_bot.db') as conn:
             cursor = conn.cursor()
@@ -18,8 +36,15 @@ def add_expense(merchant, amount, payer, split, category):
     return False
 
 
-def get_total_monthly_expenses(year, month):
-    """Calculates the grand total of all expenses for a specific month and year."""
+def get_total_monthly_expenses(year: int, month: int) -> float:
+    """Return the total financial burden for a given month.
+
+    Shared expenses are halved per person; personal expenses are counted in full.
+
+    :param year: The year to query.
+    :param month: The month to query (1–12).
+    :returns: Rounded total in ILS, or ``0.0`` on error.
+    """
     try:
         with sqlite3.connect('finance_bot.db') as conn:
             cursor = conn.cursor()
@@ -43,8 +68,11 @@ def get_total_monthly_expenses(year, month):
         return 0.0
 
 
-def get_average_total_monthly_expenses():
-    """Calculates the average total amount spent per month across all categories."""
+def get_average_total_monthly_expenses() -> float:
+    """Return the average monthly financial burden across all recorded months.
+
+    :returns: Rounded average in ILS, or ``0.0`` on error.
+    """
     try:
         with sqlite3.connect('finance_bot.db') as conn:
             cursor = conn.cursor()
@@ -70,8 +98,14 @@ def get_average_total_monthly_expenses():
         return 0.0
 
 
-def get_monthly_expenses_by_category(year, month, category):
-    """Calculates the amount spent in a specific month for a specific category."""
+def get_monthly_expenses_by_category(year: int, month: int, category: str) -> float:
+    """Return the total spent in a specific category for a given month.
+
+    :param year: The year to query.
+    :param month: The month to query (1–12).
+    :param category: The expense category to filter by.
+    :returns: Total in ILS, or ``0.0`` on error.
+    """
     try:
         with sqlite3.connect('finance_bot.db') as conn:
             cursor = conn.cursor()
@@ -95,8 +129,15 @@ def get_monthly_expenses_by_category(year, month, category):
         return 0.0
 
 
-def get_spending_per_person_per_month(year, month):
-    """Calculates the total financial burden per person for a specific month."""
+def get_spending_per_person_per_month(year: int, month: int) -> dict:
+    """Return the total financial burden per person for a given month.
+
+    Each person's burden = their personal spend + half of all shared spend.
+
+    :param year: The year to query.
+    :param month: The month to query (1–12).
+    :returns: ``{payer: total_spent}`` dict, or ``{}`` on error.
+    """
     try:
         with sqlite3.connect('finance_bot.db') as conn:
             cursor = conn.cursor()
@@ -132,8 +173,13 @@ def get_spending_per_person_per_month(year, month):
         return {}
 
 
-def get_shared_monthly_totals(year, month):
-    """Returns the actual shared expense burden per person for a given month."""
+def get_shared_monthly_totals(year: int, month: int) -> float:
+    """Return the shared expense burden per person for a given month (total shared / 2).
+
+    :param year: The year to query.
+    :param month: The month to query (1–12).
+    :returns: Each person's share in ILS, or ``0.0`` on error.
+    """
     try:
         with sqlite3.connect('finance_bot.db') as conn:
             cursor = conn.cursor()
@@ -151,8 +197,13 @@ def get_shared_monthly_totals(year, month):
         return 0.0
 
 
-def get_personal_monthly_totals(year, month):
-    """Returns the total personal spending per person for a given month."""
+def get_personal_monthly_totals(year: int, month: int) -> dict:
+    """Return the total personal spending per person for a given month.
+
+    :param year: The year to query.
+    :param month: The month to query (1–12).
+    :returns: ``{payer: total_personal_spent}`` dict, or ``{}`` on error.
+    """
     try:
         with sqlite3.connect('finance_bot.db') as conn:
             cursor = conn.cursor()
@@ -171,8 +222,17 @@ def get_personal_monthly_totals(year, month):
         return {}
 
 
-def get_monthly_settlement(year, month):
-    """Calculates who owes whom for a specific month based on shared expenses."""
+def get_monthly_settlement(year: int, month: int) -> dict:
+    """Calculate who owes whom based on shared expense payments for a given month.
+
+    Compares each person's actual payments against the fair share (total / 2)
+    to determine the debtor and creditor.
+
+    :param year: The year to query.
+    :param month: The month to query (1–12).
+    :returns: ``{"debtor": str, "creditor": str, "amount": float}`` or
+              ``{"balanced": True, "amount": 0.0}`` if no settlement is needed.
+    """
     try:
         with sqlite3.connect('finance_bot.db') as conn:
             cursor = conn.cursor()
@@ -190,6 +250,7 @@ def get_monthly_settlement(year, month):
 
         total_shared = sum(payments.values())
         fair_share = total_shared / 2.0
+        # Positive balance = overpaid (creditor), negative = underpaid (debtor)
         balances = {person: round(paid - fair_share, 2) for person, paid in payments.items()}
         debtor = min(balances, key=balances.get)
         creditor = max(balances, key=balances.get)
@@ -204,8 +265,15 @@ def get_monthly_settlement(year, month):
         return {}
 
 
-def get_raw_monthly_expenses(year, month, split=None):
-    """Fetches all individual expense records for a specific month and year."""
+def get_raw_monthly_expenses(year: int, month: int, split: str | None = None) -> list[dict]:
+    """Return all individual expense records for a given month.
+
+    :param year: The year to query.
+    :param month: The month to query (1–12).
+    :param split: Optional filter — ``'shared'``, ``'personal'``, or ``None`` for all.
+    :returns: List of expense dicts with ``id``, ``merchant``, ``amount``,
+              ``category``, ``payer``, ``split``, and ``date`` keys.
+    """
     try:
         with sqlite3.connect('finance_bot.db') as conn:
             conn.row_factory = sqlite3.Row
@@ -224,8 +292,13 @@ def get_raw_monthly_expenses(year, month, split=None):
         return []
 
 
-def update_expense_category(expense_id, new_category):
-    """Updates the category of a specific expense by id."""
+def update_expense_category(expense_id: int, new_category: str) -> bool:
+    """Update the category of a specific expense.
+
+    :param expense_id: Primary key of the expense to update.
+    :param new_category: The new category value.
+    :returns: ``True`` if a row was updated, ``False`` otherwise.
+    """
     try:
         with sqlite3.connect('finance_bot.db') as conn:
             cursor = conn.cursor()
@@ -240,8 +313,16 @@ def update_expense_category(expense_id, new_category):
         return False
 
 
-def update_expense(expense_id, merchant, amount, category, payer):
-    """Updates all editable fields of a specific expense record."""
+def update_expense(expense_id: int, merchant: str, amount: float, category: str, payer: str) -> bool:
+    """Update all editable fields of a specific expense record.
+
+    :param expense_id: Primary key of the expense to update.
+    :param merchant: Updated merchant name.
+    :param amount: Updated amount in ILS.
+    :param category: Updated expense category.
+    :param payer: Updated payer name.
+    :returns: ``True`` if a row was updated, ``False`` otherwise.
+    """
     try:
         with sqlite3.connect('finance_bot.db') as conn:
             cursor = conn.cursor()
@@ -258,8 +339,14 @@ def update_expense(expense_id, merchant, amount, category, payer):
         return False
 
 
-def get_raw_yearly_expenses(year, split=None):
-    """Fetches all expense records for an entire year in a single query."""
+def get_raw_yearly_expenses(year: int, split: str | None = None) -> list[dict]:
+    """Return all individual expense records for an entire year.
+
+    :param year: The year to query.
+    :param split: Optional filter — ``'shared'``, ``'personal'``, or ``None`` for all.
+    :returns: List of expense dicts with ``merchant``, ``amount``, ``category``,
+              ``payer``, ``split``, and ``date`` keys.
+    """
     try:
         with sqlite3.connect('finance_bot.db') as conn:
             conn.row_factory = sqlite3.Row
@@ -278,8 +365,14 @@ def get_raw_yearly_expenses(year, split=None):
         return []
 
 
-def get_yearly_summary(year, split=None):
-    """Returns pre-calculated spending summaries for charts."""
+def get_yearly_summary(year: int, split: str | None = None) -> dict:
+    """Return pre-aggregated monthly trend and category breakdown for a full year.
+
+    :param year: The year to summarize.
+    :param split: Optional filter — ``'shared'``, ``'personal'``, or ``None`` for all.
+    :returns: Dict with ``year``, ``split``, ``monthly_trend`` (``{month: total}``),
+              and ``category_breakdown`` (``{category: total}``).
+    """
     try:
         with sqlite3.connect('finance_bot.db') as conn:
             conn.row_factory = sqlite3.Row

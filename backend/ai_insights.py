@@ -1,3 +1,13 @@
+"""
+ai_insights.py
+==============
+
+Scheduled AI agent that generates financial insights from recent spending data.
+Retrieves the last 14 days of financial context, sends it to OpenAI GPT-4o-mini,
+saves the resulting insight to the local SQLite database, and forwards it to the
+configured Telegram chat.
+"""
+
 import os
 import json
 import logging
@@ -7,15 +17,19 @@ from database_manager import get_ai_context_data
 import sqlite3
 import datetime
 import sys
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
 class FinancialInsightsAgent:
-    """
-    The 'Brain' of the finance bot.
+    """The AI brain of the finance bot.
+
     Retrieves formatted financial context and generates actionable insights.
     """
-    def __init__(self):
+
+    def __init__(self) -> None:
+        """Initialize the agent and validate the OpenAI API key."""
         load_dotenv()
         self.api_key = os.getenv("OPENAI_API_KEY")
         if not self.api_key:
@@ -24,7 +38,13 @@ class FinancialInsightsAgent:
         self.client = OpenAI(api_key=self.api_key)
         self.model_name = "gpt-4o-mini"
 
-    def _get_system_prompt(self):
+    def _get_system_prompt(self) -> str:
+        """Build the system prompt for the OpenAI chat completion.
+
+        :returns: Instruction string telling the model to focus on variable
+                  spending categories and return a JSON object with
+                  ``insight`` and ``type`` keys.
+        """
         return(
             "You are an expert, proactive financial assistant. "
             "Your job is to provide the user with ONE highly meaningful insight about their recent spending. "
@@ -40,21 +60,21 @@ class FinancialInsightsAgent:
             "OUTPUT FORMAT: Return a strict JSON object with two keys: "
             "'insight' (1-2 sentences) and 'type' ('alert', 'summary', or 'praise')."
         )
-    def generate_insight(self):
+
+    def generate_insight(self) -> None:
+        """Run the full agent loop: fetch data, query AI, save result, notify via Telegram.
+
+        Follows a perceive → reason → act pattern:
+
+        1. Fetches the last 14 days of financial data.
+        2. Sends it to OpenAI for analysis.
+        3. Saves the result to the database.
+        4. Forwards the insight to Telegram.
         """
-        The main Agent loop:
-        1. Perception (Get Data)
-        2. Reasoning (Talk to AI)
-        3. Action (Save to DB)
-        """
-        # 1. PERCEPTION: Get the last 14 days of data
         logger.info("Gathering the last 14 days of financial data...")
         context_data = get_ai_context_data()
-
-        # Convert the Python dictionary to a string so the AI can read it
         context_json = json.dumps(context_data)
 
-        # 2. REASONING: Send the data to OpenAI
         logger.info("Sending data to OpenAI for analysis...")
         try:
             response = self.client.chat.completions.create(
@@ -63,11 +83,9 @@ class FinancialInsightsAgent:
                     {"role": "system", "content": self._get_system_prompt()},
                     {"role": "user", "content": f"Analyze this data: {context_json}"}
                 ],
-                # This ensures the AI returns a JSON object we can parse
-                response_format={"type": "json_object"}
+                response_format={"type": "json_object"}  # Forces valid JSON output from the model
             )
 
-            # Parse the text response back into a Python dictionary
             raw_content = response.choices[0].message.content
             result = json.loads(raw_content)
 
@@ -76,17 +94,21 @@ class FinancialInsightsAgent:
 
             logger.info(f"💡 AI Insight ({insight_type}): {insight_text}")
 
-            # 3. ACTION: Save the insight into the database and get the ID
             insight_id = self._save_to_database(insight_text, insight_type)
 
-            # 4. ACTION: Trigger Telegram
             if insight_id:
                 self.send_to_telegram(insight_id, insight_text, insight_type)
 
         except Exception as e:
             logger.error(f"Post-processing failed: {e}")
 
-    def _save_to_database(self, text, insight_type):
+    def _save_to_database(self, text: str, insight_type: str) -> int | None:
+        """Persist a generated insight to the ``ai_insights`` table.
+
+        :param text: The insight text produced by the AI.
+        :param insight_type: One of ``'alert'``, ``'summary'``, or ``'praise'``.
+        :returns: The ``rowid`` of the newly inserted row, or ``None`` on failure.
+        """
         try:
             with sqlite3.connect('finance_bot.db') as conn:
                 cursor = conn.cursor()
@@ -99,8 +121,11 @@ class FinancialInsightsAgent:
             logger.error(f"❌ Database error: {e}")
             return None
 
-    def _mark_as_read(self, insight_id):
-        """A helper function to update the DB status."""
+    def _mark_as_read(self, insight_id: int) -> None:
+        """Mark an insight as read in the database.
+
+        :param insight_id: Primary key of the insight to update.
+        """
         try:
             with sqlite3.connect('finance_bot.db') as conn:
                 cursor = conn.cursor()
@@ -110,9 +135,12 @@ class FinancialInsightsAgent:
         except sqlite3.Error as e:
             logger.error(f"❌ Failed to mark insight as read: {e}")
 
-    def send_to_telegram(self, insight_id, insight_text, insight_type):
-        """
-        Pure worker function: Receives data, sends it, and triggers the DB update.
+    def send_to_telegram(self, insight_id: int, insight_text: str, insight_type: str) -> None:
+        """Send a formatted insight message to the configured Telegram chat.
+
+        :param insight_id: Database ID used to mark the insight as read after delivery.
+        :param insight_text: The insight body to include in the message.
+        :param insight_type: Controls the header icon (``'alert'``, ``'praise'``, ``'summary'``).
         """
         import requests
 
@@ -123,7 +151,7 @@ class FinancialInsightsAgent:
             logger.error("Telegram credentials missing. Skipping message.")
             return
 
-        # Format the visual template
+        # Map insight type to a Telegram-formatted header with emoji
         icons = {
             "alert": "🚨 *FINANCIAL ALERT* 🚨",
             "praise": "🥳 *GOOD NEWS* 🥳",
@@ -132,7 +160,6 @@ class FinancialInsightsAgent:
         header = icons.get(insight_type, "💡 *NEW INSIGHT*")
         telegram_message = f"{header}\n\n{insight_text}"
 
-        # Send to Telegram
         url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
         payload = {
             "chat_id": chat_id,
@@ -144,13 +171,12 @@ class FinancialInsightsAgent:
             response = requests.post(url, data=payload)
             if response.status_code == 200:
                 logger.info("🚀 Insight sent to Telegram!")
-
-                # Trigger the tiny helper function we just made
                 self._mark_as_read(insight_id)
             else:
                 logger.error(f"Telegram failed: {response.text}")
         except Exception as e:
             logger.error(f"Connection error to Telegram: {e}")
+
 
 if __name__ == "__main__":
     today_ordinal = datetime.date.today().toordinal()

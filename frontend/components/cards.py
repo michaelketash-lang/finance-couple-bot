@@ -1,3 +1,13 @@
+"""
+components/cards.py
+===================
+
+Reusable Dash Bootstrap card components for the finance bot frontend.
+
+Currently provides a single budget progress card used in the Budget tab
+to display per-category spending vs. target.
+"""
+
 from __future__ import annotations
 
 import dash_bootstrap_components as dbc
@@ -9,15 +19,19 @@ def budget_progress_card(
     actual: float,
     target: float,
 ) -> dbc.Card:
-    """
-    A single category progress card showing spent vs target as a labelled
-    progress bar.
+    """Build a category budget progress card with a color-coded progress bar.
 
     Color logic:
-      - No target set (target == 0)  → grey  / "No target set"
-      - Under 80% spent              → green  (on track)
-      - 80–99% spent                 → yellow (getting close)
-      - 100%+ spent                  → red    (over budget)
+
+    - No target set (``target == 0``) → grey / "No target set"
+    - Under 80% spent → green (on track)
+    - 80–99% spent → yellow (getting close)
+    - 100%+ spent → red (over budget)
+
+    :param category: The expense category name displayed as the card title.
+    :param actual: Amount spent so far in ILS.
+    :param target: Monthly budget target in ILS.
+    :returns: A ``dbc.Card`` component ready to render in a Dash layout.
     """
     if target <= 0:
         pct = 0.0
