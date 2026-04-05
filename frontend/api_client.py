@@ -1,12 +1,20 @@
+"""
+api_client.py
+=============
+
+HTTP client for the finance bot's Flask REST API.
+
+All functions use a shared ``requests.Session`` to reuse the TCP/SSL
+connection across calls, reducing overhead on repeated dashboard loads.
+
+The base URL points to the production Flask server on PythonAnywhere.
+"""
+
 import requests
 import pandas as pd
 
-# Standard base URL for production Flask development
 BASE_URL = "https://michaelketash.pythonanywhere.com/api"
-
-# --- PRO SPEED TIP: Use a Session to reuse the TCP/SSL connection ---
-# This eliminates the SSL handshake overhead for every single request,
-# making the dashboard feel incredibly fast and responsive.
+# Shared session reuses the TCP/SSL connection across all API calls
 session = requests.Session()
 
 # Categories must match the database constraints
@@ -17,9 +25,13 @@ CATEGORIES = [
 
 
 def fetch_raw_expenses(year: int, month: int, split: str = "shared") -> pd.DataFrame:
-    """
-    Fetches raw expense rows from the API to populate the DataTable and Charts.
-    Includes the row id so edits can be saved back to the correct DB record.
+    """Fetch raw expense rows for a given month and split type.
+
+    :param year: The year to query.
+    :param month: The month to query (1–12).
+    :param split: ``'shared'`` or ``'personal'`` (defaults to ``'shared'``).
+    :returns: DataFrame with columns ``id``, ``date``, ``merchant``, ``amount``,
+              ``category``, ``payer``, ``split``. Returns an empty DataFrame on error.
     """
     url = f"{BASE_URL}/expenses/raw?year={year}&month={month}&split={split}"
     columns = ["id", "date", "merchant", "amount", "category", "payer", "split"]
@@ -43,8 +55,10 @@ def fetch_raw_expenses(year: int, month: int, split: str = "shared") -> pd.DataF
 
 
 def fetch_all_budgets() -> pd.DataFrame:
-    """
-    Fetches all category budgets from the API.
+    """Fetch all category budget targets.
+
+    :returns: DataFrame with columns ``category`` and ``monthly_target``.
+              Returns an empty DataFrame on error.
     """
     url = f"{BASE_URL}/budget/all"
     columns = ["category", "monthly_target"]
@@ -67,9 +81,12 @@ def fetch_all_budgets() -> pd.DataFrame:
 
 
 def fetch_yearly_data(year: int, split: str = "shared") -> pd.DataFrame:
-    """
-    Fetches raw data for all 12 months of a specific year in ONE single HTTP request.
-    This eliminates the N+1 query delay and drastically speeds up the dashboard.
+    """Fetch raw expense rows for all 12 months of a year in a single request.
+
+    :param year: The year to query.
+    :param split: ``'shared'`` or ``'personal'`` (defaults to ``'shared'``).
+    :returns: DataFrame with columns ``date``, ``merchant``, ``amount``,
+              ``category``, ``payer``, ``split``. Returns an empty DataFrame on error.
     """
     url = f"{BASE_URL}/expenses/yearly/raw?year={year}&split={split}"
     columns = ["date", "merchant", "amount", "category", "payer", "split"]
@@ -93,8 +110,12 @@ def fetch_yearly_data(year: int, split: str = "shared") -> pd.DataFrame:
 
 
 def fetch_yearly_summary(year: int, split: str = "shared") -> dict:
-    """
-    Fetches pre-calculated yearly aggregates for speed.
+    """Fetch pre-aggregated yearly spending summaries.
+
+    :param year: The year to query.
+    :param split: ``'shared'`` or ``'personal'`` (defaults to ``'shared'``).
+    :returns: Dict with ``monthly_trend`` and ``category_breakdown`` keys,
+              or ``{}`` on error.
     """
     url = f"{BASE_URL}/expenses/yearly/summary?year={year}&split={split}"
     try:
@@ -107,9 +128,11 @@ def fetch_yearly_summary(year: int, split: str = "shared") -> dict:
 
 
 def save_category_budget(category: str, monthly_target: float) -> bool:
-    """
-    Saves (upserts) a monthly budget target for a single category.
-    Returns True on success, False on failure.
+    """Upsert a monthly budget target for a single category.
+
+    :param category: The expense category to set the budget for.
+    :param monthly_target: The target spend amount in ILS.
+    :returns: ``True`` on success, ``False`` on failure.
     """
     url = f"{BASE_URL}/budget"
     try:
@@ -123,9 +146,14 @@ def save_category_budget(category: str, monthly_target: float) -> bool:
 
 def update_expense(expense_id: int, merchant: str, amount: float,
                    category: str, payer: str) -> bool:
-    """
-    Saves edits to a single expense record via PUT /expenses/<id>.
-    Returns True on success, False on failure.
+    """Update all editable fields of a single expense record.
+
+    :param expense_id: Primary key of the expense to update.
+    :param merchant: Updated merchant name.
+    :param amount: Updated amount in ILS.
+    :param category: Updated expense category.
+    :param payer: Updated payer name.
+    :returns: ``True`` on success, ``False`` on failure.
     """
     url = f"{BASE_URL}/expenses/{expense_id}"
     try:
@@ -143,10 +171,14 @@ def update_expense(expense_id: int, merchant: str, amount: float,
 
 
 def fetch_spending_per_person(year: int, month: int) -> dict:
-    """
-    Fetches the total financial burden per person for a given month.
+    """Fetch the total financial burden per person for a given month.
+
     Each person's burden = their personal expenses + half of all shared expenses.
-    Returns {payer: total}, e.g. {'Michael': 620.0, 'Ori': 500.0}.
+
+    :param year: The year to query.
+    :param month: The month to query (1–12).
+    :returns: ``{payer: total}`` dict (e.g. ``{'Michael': 620.0, 'Ori': 500.0}``),
+              or ``{}`` on error.
     """
     url = f"{BASE_URL}/expenses/per-person?year={year}&month={month}"
     try:
@@ -160,9 +192,12 @@ def fetch_spending_per_person(year: int, month: int) -> dict:
 
 
 def fetch_settlement(year: int, month: int) -> dict:
-    """
-    Fetches the monthly settlement result.
-    Returns {debtor, creditor, amount} or {balanced: True, amount: 0.0}.
+    """Fetch the monthly settlement result.
+
+    :param year: The year to query.
+    :param month: The month to query (1–12).
+    :returns: ``{"debtor": str, "creditor": str, "amount": float}`` or
+              ``{"balanced": True, "amount": 0.0}`` on error.
     """
     url = f"{BASE_URL}/expenses/settlement?year={year}&month={month}"
     try:
@@ -175,9 +210,12 @@ def fetch_settlement(year: int, month: int) -> dict:
 
 
 def fetch_personal_totals(year: int, month: int) -> dict:
-    """
-    Fetches total personal spending per person for a given month.
-    Returns {payer: personal_amount}, e.g. {'Michael': 450.0, 'Ori': 300.0}.
+    """Fetch total personal spending per person for a given month.
+
+    :param year: The year to query.
+    :param month: The month to query (1–12).
+    :returns: ``{payer: personal_amount}`` dict
+              (e.g. ``{'Michael': 450.0, 'Ori': 300.0}``), or ``{}`` on error.
     """
     url = f"{BASE_URL}/expenses/personal?year={year}&month={month}"
     try:
@@ -191,9 +229,11 @@ def fetch_personal_totals(year: int, month: int) -> dict:
 
 
 def fetch_budget_pacing(year: int, month: int) -> dict:
-    """
-    Fetches the pacing data (status, amount over/under budget).
-    Uses existing GET /budget/pacing route.
+    """Fetch the budget pacing status for a given month.
+
+    :param year: The year to query.
+    :param month: The month to query (1–12).
+    :returns: ``{"status": str, "amount": float}`` dict, or a default error dict.
     """
     url = f"{BASE_URL}/budget/pacing?year={year}&month={month}"
     try:
@@ -206,9 +246,12 @@ def fetch_budget_pacing(year: int, month: int) -> dict:
 
 
 def fetch_dashboard_data(year: int, month: int) -> dict:
-    """
-    BFF endpoint — returns everything the Expenses tab needs in a single HTTP call:
-    raw monthly rows (expenses), full-year raw rows (yearly_raw), KPIs, and payer summary.
+    """Fetch all Expenses tab data in a single BFF round-trip.
+
+    :param year: The year to query.
+    :param month: The month to query (1–12).
+    :returns: Dict with ``expenses``, ``yearly_raw``, ``kpis``, and
+              ``payer_summary`` keys, or ``{}`` on error.
     """
     url = f"{BASE_URL}/bff/dashboard-data?year={year}&month={month}"
     try:
@@ -221,9 +264,12 @@ def fetch_dashboard_data(year: int, month: int) -> dict:
 
 
 def fetch_budget_bff(year: int, month: int) -> dict:
-    """
-    BFF endpoint — returns everything the Budget tab needs in a single HTTP call:
-    budget targets, per-category actuals (aggregated server-side), and pacing status.
+    """Fetch all Budget tab data in a single BFF round-trip.
+
+    :param year: The year to query.
+    :param month: The month to query (1–12).
+    :returns: Dict with ``budgets``, ``category_actuals``, and ``pacing`` keys,
+              or ``{}`` on error.
     """
     url = f"{BASE_URL}/bff/budget-data?year={year}&month={month}"
     try:
@@ -236,7 +282,14 @@ def fetch_budget_bff(year: int, month: int) -> dict:
 
 
 def export_to_sheets(year: int, month: int, split: str) -> dict:
-    """Exports the current month's transactions to Google Sheets."""
+    """Export a month's expenses to a new tab in the configured Google Sheet.
+
+    :param year: The year to export.
+    :param month: The month to export (1–12).
+    :param split: The split filter to export (``'shared'``, ``'personal'``, or a payer name).
+    :returns: Dict with ``success``, ``url``, ``tab``, and ``rows`` keys on success,
+              or ``{"error": str}`` on failure.
+    """
     url = f"{BASE_URL}/expenses/export-sheets"
     try:
         response = session.post(url, json={"year": year, "month": month, "split": split})

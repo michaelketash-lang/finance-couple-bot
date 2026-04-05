@@ -1,3 +1,16 @@
+"""
+layouts/budget_layout.py
+========================
+
+Dash layout and callbacks for the Budget tab.
+
+Provides the full page layout (year dropdown, month tabs, budget goals table,
+and category progress cards) and registers two reactive callbacks:
+
+- ``_update_budget_view`` — fetches budget + actuals on year/month change.
+- ``_save_budgets`` — persists edited budget targets on button click.
+"""
+
 from __future__ import annotations
 
 import calendar
@@ -14,6 +27,7 @@ from api_client import fetch_budget_bff, save_category_budget, CATEGORIES
 
 @dataclass(frozen=True)
 class _Ids:
+    """Frozen dataclass holding all Dash component IDs for the Budget tab."""
     year_dropdown: str = "budget-year-dropdown"
     month_tabs: str = "budget-month-tabs"
     table: str = "budgets-table"
@@ -23,6 +37,10 @@ class _Ids:
 
 
 def _month_tabs_children() -> list[dbc.Tab]:
+    """Build the list of 12 month tab components.
+
+    :returns: A list of ``dbc.Tab`` objects, one per calendar month.
+    """
     return [
         dbc.Tab(label=calendar.month_abbr[m], tab_id=str(m), className="fw-medium")
         for m in range(1, 13)
@@ -30,6 +48,11 @@ def _month_tabs_children() -> list[dbc.Tab]:
 
 
 def get_budget_layout() -> dbc.Container:
+    """Build and return the full Budget tab layout.
+
+    :returns: A ``dbc.Container`` with year selector, month tabs, budget
+              goals table, and category progress cards.
+    """
     ids = _Ids()
     current_year = datetime.today().year
     current_month = str(datetime.today().month)
@@ -79,7 +102,6 @@ def get_budget_layout() -> dbc.Container:
                 dbc.Col(
                     html.Div(
                         [
-                            # Header row: title + save button side by side
                             html.Div(
                                 [
                                     html.Div(
@@ -149,21 +171,19 @@ def get_budget_layout() -> dbc.Container:
 
 
 def register_budget_callbacks(app: Dash) -> None:
-    """
-    Registers all reactive callbacks for the Budget tab.
+    """Register all reactive callbacks for the Budget tab.
 
-    There is one callback here that does the following:
-      Inputs  → year dropdown value + active month tab
-      Outputs → budget table data + progress cards children
+    Callback 1 — ``_update_budget_view``:
+        Fires on year or month change. Fetches budget targets and category
+        actuals via the BFF endpoint, merges them, and populates the table
+        and progress cards.
 
-    Whenever the user switches month or year, Dash fires this function.
-    We then:
-      1. Fetch the saved budget targets from the API (/budget/all)
-      2. Fetch every expense for that month from the API (/expenses/raw)
-      3. Group expenses by category to get the actual spend per category
-      4. Merge: for each category we now have (target, actual, remaining)
-      5. Push the merged rows into the table
-      6. Build a progress card for each category and push them into the grid
+    Callback 2 — ``_save_budgets``:
+        Fires only when the user clicks "Save Budgets". Reads the current
+        table rows via ``State`` (avoiding circular triggers) and persists
+        each category's target to the API.
+
+    :param app: The ``Dash`` application instance to register callbacks on.
     """
     ids = _Ids()
 
@@ -174,25 +194,20 @@ def register_budget_callbacks(app: Dash) -> None:
         Input(ids.month_tabs, "active_tab"),
     )
     def _update_budget_view(selected_year: int, active_month_str: str):
+        """Fetch budget + actuals and populate the table and progress cards."""
         if not selected_year or not active_month_str:
             return [], []
 
         month = int(active_month_str)
 
-        # --- Single BFF call replaces fetch_all_budgets() + fetch_raw_expenses() ---
         bff = fetch_budget_bff(selected_year, month)
 
-        # --- 1. Budget targets ---
         budgets_list = bff.get("budgets", [])
         target_by_cat = {b["category"]: float(b["monthly_target"]) for b in budgets_list}
 
-        # --- 2. Category actuals (pre-aggregated by the BFF) ---
         actual_by_cat = {k: float(v) for k, v in bff.get("category_actuals", {}).items()}
 
-        # --- 3. Merge targets with actuals, compute remaining ---
-        # Always iterate over ALL categories so every row appears in the table,
-        # even if no budget target has been saved yet (defaults to 0).
-
+        # Always include all categories so empty rows still appear in the table
         table_rows = []
         for cat in CATEGORIES:
             target = float(target_by_cat.get(cat, 0.0))
@@ -207,8 +222,7 @@ def register_budget_callbacks(app: Dash) -> None:
                 }
             )
 
-        # --- 5. Build progress cards grid ---
-        # One card per category, arranged in a responsive 3-column grid.
+        # One card per category, arranged in a responsive 3-column grid
         card_cols = [
             dbc.Col(
                 budget_progress_card(
@@ -227,18 +241,6 @@ def register_budget_callbacks(app: Dash) -> None:
 
         return table_rows, progress_grid
 
-    # --- Callback 2: Save edited budget targets ---
-    # This callback is intentionally separate from the update callback above.
-    # It only fires when the user explicitly clicks "Save Budgets".
-    #
-    # Input  → save button n_clicks (fires on every click)
-    # State  → current table data (read without triggering the callback)
-    # Output → save_status text (confirms success or reports errors)
-    #
-    # Using State instead of Input for the table data is the key pattern here:
-    # State lets us READ the current table rows at the moment the button is
-    # clicked, without the table itself being able to trigger this callback.
-    # That completely avoids the circular-trigger problem.
     @app.callback(
         Output(ids.save_status, "children"),
         Input(ids.save_btn, "n_clicks"),
@@ -246,6 +248,11 @@ def register_budget_callbacks(app: Dash) -> None:
         prevent_initial_call=True,
     )
     def _save_budgets(n_clicks: int, table_data: list[dict]):
+        """Persist edited budget targets when the Save button is clicked.
+
+        Uses ``State`` for the table data so the table itself cannot
+        trigger this callback — avoiding circular firing.
+        """
         if not table_data:
             return "Nothing to save."
 

@@ -1,3 +1,19 @@
+"""
+layouts/expenses_callbacks.py
+==============================
+
+Dash callbacks for the Expenses tab.
+
+Uses a master/slave pattern to minimize API calls:
+
+- **Master callback** — fires on year/month change, fetches all data in one
+  BFF round-trip, and writes it to a ``dcc.Store``.
+- **Slave callbacks** — read from the store and render the table, charts,
+  KPI cards, and payer summary without making additional HTTP requests.
+- **Edit callback** — fires only on table cell edits and calls the API once.
+- **Export callback** — fires only on button click and triggers a Sheets export.
+"""
+
 from __future__ import annotations
 
 import os
@@ -19,6 +35,10 @@ PAYER_2 = os.getenv('PAYER_2', 'Ori')
 
 
 def register_expenses_callbacks(app: Dash) -> None:
+    """Register all reactive callbacks for the Expenses tab.
+
+    :param app: The ``Dash`` application instance to register callbacks on.
+    """
     ids = _Ids()
 
     # =========================================================================
@@ -35,6 +55,7 @@ def register_expenses_callbacks(app: Dash) -> None:
         Input(ids.month_tabs, "active_tab"),
     )
     def _fetch_dashboard_data(selected_year: int, active_month_str: str):
+        """Fetch all dashboard data and write it to the store."""
         if not selected_year or not active_month_str:
             return {}
         return fetch_dashboard_data(selected_year, int(active_month_str))
@@ -53,6 +74,7 @@ def register_expenses_callbacks(app: Dash) -> None:
         Input(ids.dashboard_store, "data"),
     )
     def _render_table(split_value: str, store: dict):
+        """Filter the expense rows from the store by split type and populate the table."""
         if not store:
             return [], [], []
 
@@ -89,6 +111,7 @@ def register_expenses_callbacks(app: Dash) -> None:
         Input(ids.dashboard_store, "data"),
     )
     def _render_charts_and_kpis(split_value: str, active_month_str: str, store: dict):
+        """Build all charts and KPI values from the dashboard store."""
         if not store or not active_month_str:
             return {}, {}, "₪0", "₪0", "fw-bold", "₪0"
 
@@ -100,7 +123,6 @@ def register_expenses_callbacks(app: Dash) -> None:
         yearly_raw = store.get("yearly_raw", [])
         kpis = store.get("kpis", {})
 
-        # --- Build yearly DataFrame from store ---
         if yearly_raw:
             df_year = pd.DataFrame(yearly_raw)
             df_year["date"] = pd.to_datetime(df_year["date"], errors="coerce")
@@ -108,7 +130,6 @@ def register_expenses_callbacks(app: Dash) -> None:
         else:
             df_year = pd.DataFrame(columns=["date", "merchant", "amount", "category", "payer", "split"])
 
-        # --- Trend chart data: monthly totals for the selected view ---
         if is_person_view:
             # Personal rows for this payer + half of all shared rows
             df_personal = df_year[
@@ -128,7 +149,6 @@ def register_expenses_callbacks(app: Dash) -> None:
 
         trends_fig = monthly_trends_bar_chart(summary_dict=trend_summary, year=store.get("year", 0))
 
-        # --- Pie chart data: current month, same split/payer filter ---
         expenses = store.get("expenses", [])
         if expenses:
             df_month = pd.DataFrame(expenses)
@@ -148,7 +168,6 @@ def register_expenses_callbacks(app: Dash) -> None:
 
         pie_fig = category_pie_chart(df=df_pie)
 
-        # --- KPI: Total Spent ---
         if is_person_view:
             per_person = store.get("payer_summary", {}).get("per_person", {})
             total_spent = float(per_person.get(split_value.capitalize(), 0.0))
@@ -156,7 +175,6 @@ def register_expenses_callbacks(app: Dash) -> None:
             total_spent = float(kpis.get("total_spent", 0.0))
         text_spent = f"₪{total_spent:,.0f}"
 
-        # --- KPI: Budget Pacing (shared view only) ---
         if is_person_view:
             text_pacing = "—"
             pacing_class = "text-muted fw-bold mb-0"
@@ -174,7 +192,6 @@ def register_expenses_callbacks(app: Dash) -> None:
             else:
                 pacing_class = "text-info fw-bold mb-0"
 
-        # --- KPI: Monthly Average (non-zero months only) ---
         non_zero = [float(v) for v in trend_summary.values() if float(v) > 0]
         avg_monthly = float(sum(non_zero) / len(non_zero)) if non_zero else 0.0
         text_average = f"₪{avg_monthly:,.0f}"
@@ -191,13 +208,14 @@ def register_expenses_callbacks(app: Dash) -> None:
         Input(ids.dashboard_store, "data"),
     )
     def _render_payer_summary(store: dict):
+        """Build the per-payer summary cards from the dashboard store."""
         if not store:
             return ""
 
         payer_summary = store.get("payer_summary", {})
         shared_payments = store.get("expenses", [])
 
-        # Compute shared paid per payer from the raw expenses in the store
+        # Compute how much each payer contributed to shared expenses
         shared_paid: dict[str, float] = {}
         for row in shared_payments:
             if row.get("split") == "shared":
@@ -267,7 +285,7 @@ def register_expenses_callbacks(app: Dash) -> None:
         return html.Div(cards, className="d-flex flex-wrap")
 
     # =========================================================================
-    # INLINE EDIT — unchanged: fires only on table cell edits, calls API once.
+    # INLINE EDIT — fires only on table cell edits, calls API once.
     # =========================================================================
 
     @app.callback(
@@ -279,6 +297,11 @@ def register_expenses_callbacks(app: Dash) -> None:
         prevent_initial_call=True,
     )
     def _save_inline_edit(current_data: list[dict], reference_data: list[dict], row_ids: list):
+        """Detect a single changed row and persist it to the API.
+
+        Compares ``current_data`` against ``reference_data`` to find exactly
+        one changed row, then calls the update endpoint for that row only.
+        """
         if not current_data or not reference_data or not row_ids:
             return no_update, no_update
 
@@ -316,7 +339,7 @@ def register_expenses_callbacks(app: Dash) -> None:
         return "Failed to save — check the server logs.", no_update
 
     # =========================================================================
-    # EXPORT — unchanged: fires only on button click.
+    # EXPORT — fires only on button click.
     # =========================================================================
 
     @app.callback(
@@ -329,17 +352,19 @@ def register_expenses_callbacks(app: Dash) -> None:
         prevent_initial_call=True,
     )
     def _export_to_sheets(n_clicks, year, active_month, split):
+        """Export the current month's expenses to Google Sheets on button click."""
         if not n_clicks:
             return no_update, no_update
 
         result = export_to_sheets(year=year, month=int(active_month), split=split or "shared")
 
         if "error" in result:
-            return f"Export failed: {result['error']}", {"fontSize": "0.875rem", "color": "red"}
+            return f"Failed: {result['error']}", {"fontSize": "0.75rem", "color": "red", "whiteSpace": "nowrap"}
 
         url = result.get("url", "")
-        tab = result.get("tab", "")
-        rows = result.get("rows", 0)
-        link = html.A(f"Open Sheet ({rows} rows → {tab})", href=url, target="_blank",
-                      className="ms-1 text-success fw-medium")
-        return ["✓ Exported! ", link], {"fontSize": "0.875rem"}
+        # Removed the long tab/row text and made the link simpler
+        link = html.A("Open", href=url, target="_blank",
+                      className="ms-1 text-success text-decoration-underline fw-bold")
+
+        # Returned a smaller font size and added whiteSpace: nowrap
+        return ["✓ Exported!", link], {"fontSize": "0.75rem", "whiteSpace": "nowrap"}

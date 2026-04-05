@@ -1,8 +1,20 @@
+"""
+app.py
+======
+
+Main Dash application entry point for the finance bot frontend.
+
+Defines a permanent left sidebar for navigation (Expenses, Budget, Investment)
+with the app logo and title at the top, and mounts all sub-module callbacks.
+
+The ``server`` attribute is exposed for Gunicorn/Render deployment.
+"""
+
 from __future__ import annotations
 
 import os
 
-from dash import Dash, Input, Output, html
+from dash import Dash, Input, Output, ctx, html, no_update
 import dash_bootstrap_components as dbc
 
 from layouts.budget_layout import get_budget_layout, register_budget_callbacks
@@ -12,8 +24,12 @@ from layouts.expenses_callbacks import register_expenses_callbacks
 PAYER_1 = os.getenv('PAYER_1', 'Michael')
 PAYER_2 = os.getenv('PAYER_2', 'Ori')
 
+SHOW = {"display": "block"}
+HIDE = {"display": "none"}
+
 
 def _investments_placeholder() -> html.Div:
+    """Return a placeholder div for the Investment page."""
     return html.Div(
         [
             html.H4("Investment dashboard", className="mb-2"),
@@ -29,56 +45,104 @@ app = Dash(
 )
 server = app.server  # Gunicorn/Render compatibility.
 
+# ── Sidebar styles ──────────────────────────────────────────────────────────
+SIDEBAR_STYLE = {
+    "position": "fixed",
+    "top": 0,
+    "left": 0,
+    "bottom": 0,
+    "width": "180px",
+    "padding": "24px 16px",
+    "backgroundColor": "#ffffff",
+    "borderRight": "1px solid #e2e8f0",
+    "display": "flex",
+    "flexDirection": "column",
+    "zIndex": 1000,
+}
+
+CONTENT_STYLE = {
+    "marginLeft": "180px",
+    "padding": "32px 24px",
+    "backgroundColor": "#f8f9fa",
+    "minHeight": "100vh",
+}
+
+NAV_LINK_STYLE = {
+    "color": "#64748b",
+    "borderRadius": "6px",
+    "fontWeight": "500",
+    "padding": "10px 14px",
+    "marginBottom": "4px",
+    "textDecoration": "none",
+}
+
+NAV_LINK_ACTIVE_STYLE = {
+    **NAV_LINK_STYLE,
+    "backgroundColor": "#f1f5f9",
+    "color": "#1a2e3b",
+}
+
 app.layout = html.Div(
-    className="bg-light pb-5",  # Added subtle background and bottom padding
     children=[
-        dbc.Container(
-            fluid=True,
-            className="p-4",  # Added padding around the whole dashboard
+
+        # ── Permanent left sidebar ──────────────────────────────────────────
+        html.Div(
+            style=SIDEBAR_STYLE,
             children=[
-                html.H2(
-                    f"{PAYER_1} & {PAYER_2} Finance Dashboard",
-                    className="text-start my-4",
+                # Logo
+                html.Img(
+                    src="/assets/logo.png",
+                    style={"width": "150px", "marginBottom": "28px"},
                 ),
-                dbc.Tabs(
+
+                # Nav links
+                html.Div(
                     [
-                        dbc.Tab(label="Expenses", tab_id="expenses"),
-                        dbc.Tab(label="Budget", tab_id="budget"),
-                        dbc.Tab(label="Investment", tab_id="investments"),
-                    ],
-                    id="main-nav-tabs",
-                    active_tab="expenses",
-                    className="mb-4",  # Added margin below the tabs for breathing room
-                ),
-                html.Div(id="page-expenses", children=get_expenses_layout()),
-                html.Div(
-                    id="page-budget",
-                    children=get_budget_layout(),
-                    style={"display": "none"},
-                ),
-                html.Div(
-                    id="page-investments",
-                    children=_investments_placeholder(),
-                    style={"display": "none"},
+                        html.A("Expenses",   id="nav-expenses",    href="#",
+                               style=NAV_LINK_ACTIVE_STYLE, className="d-block"),
+                        html.A("Budget",     id="nav-budget",      href="#",
+                               style=NAV_LINK_STYLE, className="d-block"),
+                        html.A("Investment", id="nav-investments", href="#",
+                               style=NAV_LINK_STYLE, className="d-block"),
+                    ]
                 ),
             ],
-        )
-    ],
+        ),
+
+        # ── Main content area ───────────────────────────────────────────────
+        html.Div(
+            style=CONTENT_STYLE,
+            children=[
+                html.Div(id="page-expenses",    children=get_expenses_layout()),
+                html.Div(id="page-budget",      children=get_budget_layout(),        style=HIDE),
+                html.Div(id="page-investments", children=_investments_placeholder(), style=HIDE),
+            ],
+        ),
+    ]
 )
 
 
 @app.callback(
-    Output("page-expenses", "style"),
-    Output("page-budget", "style"),
+    Output("page-expenses",    "style"),
+    Output("page-budget",      "style"),
     Output("page-investments", "style"),
-    Input("main-nav-tabs", "active_tab"),
+    Output("nav-expenses",     "style"),
+    Output("nav-budget",       "style"),
+    Output("nav-investments",  "style"),
+    Input("nav-expenses",    "n_clicks"),
+    Input("nav-budget",      "n_clicks"),
+    Input("nav-investments", "n_clicks"),
+    prevent_initial_call=True,
 )
-def _toggle_pages(active_tab: str):
-    if active_tab == "budget":
-        return {"display": "none"}, {"display": "block"}, {"display": "none"}
-    if active_tab == "investments":
-        return {"display": "none"}, {"display": "none"}, {"display": "block"}
-    return {"display": "block"}, {"display": "none"}, {"display": "none"}
+def _switch_page(n_exp, n_bud, n_inv):
+    """Switch the visible page and highlight the active nav link."""
+    triggered = ctx.triggered_id
+
+    if triggered == "nav-budget":
+        return HIDE, SHOW, HIDE, NAV_LINK_STYLE, NAV_LINK_ACTIVE_STYLE, NAV_LINK_STYLE
+    if triggered == "nav-investments":
+        return HIDE, HIDE, SHOW, NAV_LINK_STYLE, NAV_LINK_STYLE, NAV_LINK_ACTIVE_STYLE
+    return SHOW, HIDE, HIDE, NAV_LINK_ACTIVE_STYLE, NAV_LINK_STYLE, NAV_LINK_STYLE
 
 
 register_expenses_callbacks(app)
@@ -86,4 +150,4 @@ register_budget_callbacks(app)
 
 
 if __name__ == "__main__":
-    app.run(debug=True, port=8050)  # Fixed the obsolete run_server bug!
+    app.run(debug=True, port=8050)

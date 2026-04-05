@@ -31,7 +31,6 @@ def get_ai_context_data() -> dict:
 
     category_breakdown = []
     recent_transactions = []
-
     try:
         with sqlite3.connect('finance_bot.db') as conn:
             conn.row_factory = sqlite3.Row

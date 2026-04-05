@@ -1,3 +1,14 @@
+"""
+layouts/expenses_layout.py
+==========================
+
+Dash layout definition for the Expenses tab.
+
+Defines the ``_Ids`` dataclass of all component IDs used by both the layout
+and its callbacks, and builds the full page structure: controls bar, month
+tabs, KPI cards, charts, transactions table, and payer summary section.
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -17,6 +28,11 @@ PAYER_2 = os.getenv('PAYER_2', 'Ori')
 
 @dataclass(frozen=True)
 class _Ids:
+    """Frozen dataclass holding all Dash component IDs for the Expenses tab.
+
+    Shared between ``expenses_layout.py`` and ``expenses_callbacks.py`` to
+    ensure component IDs stay in sync without string duplication.
+    """
     # Controls
     split_radio: str = "expenses-split-radio"
     year_dropdown: str = "expenses-year-dropdown"
@@ -42,6 +58,13 @@ class _Ids:
 
 
 def _create_kpi_card(title: str, id: str, color: str) -> dbc.Card:
+    """Build a KPI summary card with a colored top border.
+
+    :param title: Label shown in the card header (e.g. ``'Total Spent'``).
+    :param id: Dash component ID for the value ``html.H3`` element.
+    :param color: Bootstrap color name (e.g. ``'primary'``, ``'info'``).
+    :returns: A ``dbc.Card`` component with a placeholder ``₪0`` value.
+    """
     return dbc.Card(
         [
             dbc.CardHeader(title, className="fw-bold text-uppercase",
@@ -60,15 +83,28 @@ def _create_kpi_card(title: str, id: str, color: str) -> dbc.Card:
 
 
 def _month_tabs_children() -> list[dbc.Tab]:
+    """Build the list of 12 month tab components.
+
+    :returns: A list of ``dbc.Tab`` objects, one per calendar month.
+    """
     children: list[dbc.Tab] = []
     for m in range(1, 13):
         label = calendar.month_abbr[m]
         children.append(
-            dbc.Tab(label=label, tab_id=str(m), className="fw-medium"))
+            dbc.Tab(label=label, tab_id=str(m), className="fw-medium",
+                    label_style={"padding": "6px 8px", "fontSize": "0.78rem"}))
     return children
 
 
 def get_expenses_layout() -> dbc.Container:
+    """Build and return the full Expenses tab layout.
+
+    Includes four ``dcc.Store`` components for state management and five
+    layout rows: controls, month tabs, KPI cards, charts, and the
+    transactions table with payer summary.
+
+    :returns: A ``dbc.Container`` with all Expenses tab components.
+    """
     ids = _Ids()
     current_year = datetime.today().year
     current_month = str(datetime.today().month)
@@ -85,63 +121,45 @@ def get_expenses_layout() -> dbc.Container:
             dcc.Store(id=ids.ids_store, data=[], storage_type="memory"),
             dcc.Store(id=ids.reference_store, data=[], storage_type="memory"),
 
-            # --- ROW 1: CONTROLS ---
+            # --- ROW 1: 12 MONTHS TABS + YEAR DROPDOWN + SHEETS EXPORT ICON ---
             dbc.Row(
                 [
                     dbc.Col(
-                        [
-                            html.Div(
-                                [
-                                    html.Span("Expense Type:",
-                                              className="fw-bold me-3 text-muted"),
-                                    dbc.RadioItems(
-                                        id=ids.split_radio,
-                                        options=[
-                                            {"label": "Shared",     "value": "shared"},
-                                            {"label": PAYER_1,      "value": PAYER_1.lower()},
-                                            {"label": PAYER_2,      "value": PAYER_2.lower()},
-                                        ],
-                                        value=default_split,
-                                        inline=True,
-                                        className="mb-0 me-4 fw-medium",
+                        html.Div(
+                            [
+                                dbc.Tabs(
+                                    children=_month_tabs_children(),
+                                    id=ids.month_tabs,
+                                    active_tab=current_month,
+                                    className="flex-grow-1",
+                                ),
+                                dcc.Dropdown(
+                                    id=ids.year_dropdown,
+                                    options=years_options,
+                                    value=current_year,
+                                    clearable=False,
+                                    # Added explicit marginRight here to guarantee the gap
+                                    style={"width": "110px", "minWidth": "110px", "marginRight": "16px"},
+                                    className="ms-3",
+                                ),
+                                # Google Sheets icon button
+                                dbc.Button(
+                                    html.Img(
+                                        src='data:image/svg+xml;utf8,<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" fill="%2334A853"/><path d="M14 2v6h6" fill="%231E8E3E"/><rect x="8" y="9" width="8" height="1.5" rx="0.5" fill="white"/><rect x="8" y="12" width="8" height="1.5" rx="0.5" fill="white"/><rect x="8" y="15" width="8" height="1.5" rx="0.5" fill="white"/></svg>',
+                                        style={"width": "40px", "height": "40px"}  # Increased to 40px
                                     ),
-                                    html.Span("Year:",
-                                              className="fw-bold me-2 text-muted"),
-                                    dcc.Dropdown(
-                                        id=ids.year_dropdown,
-                                        options=years_options,
-                                        value=current_year,
-                                        clearable=False,
-                                        style={"width": "130px"},
-                                        className="me-auto"
-                                    ),
-                                    dbc.Button(
-                                        [html.I(className="fas fa-file-export me-2"),
-                                         "Export to Sheets"],
-                                        id=ids.export_btn,
-                                        color="primary",
-                                    ),
-                                    html.Div(id="export-status", className="ms-3 fw-medium",
-                                             style={"fontSize": "0.875rem"}),
-                                ],
-                                className="d-flex align-items-center bg-white p-3 rounded shadow-sm w-100",
-                            )
-                        ],
+                                    id=ids.export_btn,
+                                    color="link",
+                                    className="p-1",  # Removed previous margin classes so the dropdown handles the gap
+                                    title="Export to Google Sheets",
+                                    style={"lineHeight": "1"},
+                                ),
+                                html.Div(id="export-status", className="ms-2 fw-medium",
+                                         style={"fontSize": "0.8rem"}),
+                            ],
+                            className="d-flex align-items-center",
+                        ),
                         xs=12,
-                    )
-                ],
-                className="mb-4",
-            ),
-
-            # --- ROW 2: 12 MONTHS TABS ---
-            dbc.Row(
-                [
-                    dbc.Col(
-                        dbc.Tabs(
-                            children=_month_tabs_children(),
-                            id=ids.month_tabs,
-                            active_tab=current_month,
-                        )
                     )
                 ],
                 className="mb-4",
@@ -189,8 +207,23 @@ def get_expenses_layout() -> dbc.Container:
                     dbc.Col(
                         html.Div(
                             [
-                                html.H5("Transactions",
-                                        className="mb-3 fw-bold text-muted"),
+                                html.Div(
+                                    [
+                                        html.H5("Transactions", className="mb-0 fw-bold text-muted"),
+                                        dbc.RadioItems(
+                                            id=ids.split_radio,
+                                            options=[
+                                                {"label": "Shared",  "value": "shared"},
+                                                {"label": PAYER_1,   "value": PAYER_1.lower()},
+                                                {"label": PAYER_2,   "value": PAYER_2.lower()},
+                                            ],
+                                            value=default_split,
+                                            inline=True,
+                                            className="mb-0 fw-medium",
+                                        ),
+                                    ],
+                                    className="d-flex align-items-center justify-content-between mb-3",
+                                ),
                                 expenses_datatable(
                                     data=[],
                                     categories=CATEGORIES,
