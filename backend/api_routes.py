@@ -1,6 +1,7 @@
 import os
 import datetime
 from flask import Blueprint, request, jsonify
+from bff_routes import invalidate_cache
 from database_manager import (
     add_expense,
     set_category_budget,
@@ -42,6 +43,8 @@ def api_add_expense():
         split=data['split'],
         category=data['category']
     )
+    if success:
+        invalidate_cache()
     return jsonify({"success": success})
 
 @api.route('/expenses/monthly', methods=['GET'])
@@ -313,6 +316,7 @@ def api_update_expense(expense_id):
     success = update_expense(expense_id, merchant, amount, category, payer)
     if not success:
         return jsonify({"error": "Expense not found"}), 404
+    invalidate_cache()
     return jsonify({"success": True})
 
 

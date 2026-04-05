@@ -8,6 +8,7 @@ from ai_parser import parser_service
 from database_manager import setup_database
 from telegram_bot import send_transaction_ui, register_handlers
 from api_routes import api
+from bff_routes import bff
 import base64
 import json
 from gmail_processor import GmailProcessor
@@ -28,6 +29,7 @@ bot = telebot.TeleBot(TELEGRAM_TOKEN, threaded=False)
 app = Flask(__name__)
 CORS(app)
 app.register_blueprint(api, url_prefix='/api')
+app.register_blueprint(bff, url_prefix='/api/bff')
 setup_database()
 processed_emails = set()
 register_handlers(bot)
