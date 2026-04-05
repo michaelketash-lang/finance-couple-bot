@@ -108,7 +108,7 @@ app.layout = html.Div(
             children=[
                 html.Div(id="page-expenses",    children=get_expenses_layout()),
                 html.Div(id="page-budget",      children=get_budget_layout(),        style=HIDE),
-                html.Div(id="page-investments", children=_investments_placeholder(), style=HIDE),
+                html.Div(id="page-investments", children=get_investments_layout(), style=HIDE),
             ],
         ),
     ]
