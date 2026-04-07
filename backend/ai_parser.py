@@ -123,7 +123,9 @@ class ExpenseAIParser:
                 ],
                 response_format={"type": "json_object"}  # Forces valid JSON output from the model
             )
-            return response.choices[0].message.content
+            raw = response.choices[0].message.content
+            logger.info(f"OpenAI raw response: {raw}")
+            return raw
         except Exception as e:
             logger.error(f"OpenAI API call failed: {e}")
             return None
