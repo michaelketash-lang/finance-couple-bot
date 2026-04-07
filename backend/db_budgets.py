@@ -18,15 +18,16 @@ from db_expenses import get_total_monthly_expenses
 def set_budgets_batch(budgets: list[dict]) -> bool:
     """Insert or update budget targets for multiple categories in one transaction.
 
-    :param budgets: List of ``{"category": str, "monthly_target": float}`` dicts.
+    :param budgets: List of ``{"category": str, "monthly_target": float, "payer": str}`` dicts.
+                    ``payer`` defaults to ``'shared'`` if omitted.
     :returns: ``True`` on success, ``False`` on error.
     """
     try:
         with sqlite3.connect('finance_bot.db') as conn:
             cursor = conn.cursor()
             cursor.executemany(
-                'INSERT OR REPLACE INTO budgets (category, monthly_target) VALUES (?, ?)',
-                [(b['category'], float(b['monthly_target'])) for b in budgets]
+                'INSERT OR REPLACE INTO budgets (category, monthly_target, payer) VALUES (?, ?, ?)',
+                [(b['category'], float(b['monthly_target']), b.get('payer', 'shared')) for b in budgets]
             )
             conn.commit()
             return True
@@ -35,19 +36,20 @@ def set_budgets_batch(budgets: list[dict]) -> bool:
         return False
 
 
-def set_category_budget(category: str, monthly_target: float) -> bool:
+def set_category_budget(category: str, monthly_target: float, payer: str = 'shared') -> bool:
     """Insert or update the monthly budget target for a category.
 
-    :param category: The expense category name (must match the ``budgets`` table constraint).
+    :param category: The expense category name.
     :param monthly_target: The target spend amount in ILS.
+    :param payer: Who this budget belongs to: ``'shared'``, or a payer name.
     :returns: ``True`` on success, ``False`` on validation or database error.
     """
     try:
         with sqlite3.connect('finance_bot.db') as conn:
             cursor = conn.cursor()
-            sql = '''INSERT OR REPLACE INTO budgets (category, monthly_target)
-                     VALUES (?, ?)'''
-            cursor.execute(sql, (category, monthly_target))
+            sql = '''INSERT OR REPLACE INTO budgets (category, monthly_target, payer)
+                     VALUES (?, ?, ?)'''
+            cursor.execute(sql, (category, monthly_target, payer))
             return True
     except sqlite3.IntegrityError as e:
         print(f"❌ Validation Error: Invalid category name. ({e})")
@@ -57,15 +59,16 @@ def set_category_budget(category: str, monthly_target: float) -> bool:
         return False
 
 
-def get_total_budget() -> float:
-    """Return the sum of all category monthly targets.
+def get_total_budget(payer: str = 'shared') -> float:
+    """Return the sum of all category monthly targets for a given payer.
 
+    :param payer: Filter by payer (default ``'shared'``).
     :returns: Grand total budget in ILS, or ``0.0`` if no budgets are set.
     """
     try:
         with sqlite3.connect('finance_bot.db') as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT SUM(monthly_target) FROM budgets")
+            cursor.execute("SELECT SUM(monthly_target) FROM budgets WHERE payer = ?", (payer,))
             result = cursor.fetchone()[0]
             return result if result is not None else 0.0
     except sqlite3.Error as e:
@@ -73,9 +76,11 @@ def get_total_budget() -> float:
         return 0.0
 
 
-def get_all_budgets() -> list[dict]:
-    """Return all category budget targets as a list of dicts.
+def get_all_budgets(payer: str = 'shared') -> list[dict]:
+    """Return all category budget targets for a given payer.
 
+    :param payer: Filter by payer — ``'shared'``, ``'Michael'``, ``'Ori'``, etc.
+                  Defaults to ``'shared'``.
     :returns: List of ``{"category": str, "monthly_target": float}`` dicts,
               or an empty list on error.
     """
@@ -83,7 +88,9 @@ def get_all_budgets() -> list[dict]:
         with sqlite3.connect('finance_bot.db') as conn:
             conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
-            cursor.execute("SELECT category, monthly_target FROM budgets")
+            cursor.execute(
+                "SELECT category, monthly_target FROM budgets WHERE payer = ?", (payer,)
+            )
             rows = cursor.fetchall()
             return [dict(row) for row in rows]
     except sqlite3.Error as e:
@@ -92,7 +99,7 @@ def get_all_budgets() -> list[dict]:
 
 
 def check_total_pacing(year: int, month: int) -> dict:
-    """Calculate whether spending is on track against the total monthly budget.
+    """Calculate whether spending is on track against the shared monthly budget.
 
     For the current month, projects the final spend based on the daily average.
     For past months, compares the actual total directly against the budget.
@@ -106,7 +113,9 @@ def check_total_pacing(year: int, month: int) -> dict:
         with sqlite3.connect('finance_bot.db') as conn:
             cursor = conn.cursor()
 
-            cursor.execute("SELECT COALESCE(SUM(monthly_target), 0) FROM budgets")
+            cursor.execute(
+                "SELECT COALESCE(SUM(monthly_target), 0) FROM budgets WHERE payer = 'shared'"
+            )
             total_budget = float(cursor.fetchone()[0])
 
             if total_budget == 0.0:

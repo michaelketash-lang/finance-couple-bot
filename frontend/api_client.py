@@ -41,22 +41,23 @@ def fetch_raw_expenses(year: int, month: int, split: str = "shared") -> pd.DataF
         print(f"Error fetching raw expenses: {e}")
         return pd.DataFrame(columns=columns)
 
-def fetch_budget_bff(year: int, month: int) -> dict:
+def fetch_budget_bff(year: int, month: int, payer: str = 'shared') -> dict:
     """Fetch all Budget tab data in a single BFF round-trip.
 
     :param year: The year to query.
     :param month: The month to query (1–12).
+    :param payer: Whose budget to load — ``'shared'``, ``'Michael'``, ``'Ori'``, etc.
     :returns: Dict with ``budgets``, ``category_actuals``, and ``pacing`` keys,
               or ``{}`` on error.
     """
-    url = f"{BASE_URL}/bff/budget-data?year={year}&month={month}"
+    url = f"{BASE_URL}/bff/budget-data?year={year}&month={month}&payer={payer}"
     try:
         response = session.get(url)
         response.raise_for_status()
         return response.json()
     except Exception as e:
-        print(f"Error fetching investments list: {e}")
-        return []
+        print(f"Error fetching budget data: {e}")
+        return {}
 
 def fetch_dashboard_data(year: int, month: int) -> dict:
     """Fetch all Expenses tab data in a single BFF round-trip.
@@ -75,11 +76,13 @@ def fetch_dashboard_data(year: int, month: int) -> dict:
         print(f"Error fetching dashboard data: {e}")
         return {}
 
-def fetch_all_budgets() -> pd.DataFrame:
+def fetch_all_budgets(payer: str = 'shared') -> pd.DataFrame:
     """
-    Fetches all category budgets from the API.
+    Fetches all category budgets for a given payer from the API.
+
+    :param payer: Whose budget to load — ``'shared'``, ``'Michael'``, ``'Ori'``, etc.
     """
-    url = f"{BASE_URL}/budget/all"
+    url = f"{BASE_URL}/budget/all?payer={payer}"
     columns = ["category", "monthly_target"]
 
     try:
@@ -96,6 +99,32 @@ def fetch_all_budgets() -> pd.DataFrame:
 
     except Exception as e:
         print(f"Error fetching budgets: {e}")
+        return pd.DataFrame(columns=columns)
+
+
+def fetch_yearly_expenses_raw(year: int) -> pd.DataFrame:
+    """
+    Fetches all expense rows for an entire year with no split filter.
+    Used by the budget category chart to show spending across payer types.
+    """
+    url = f"{BASE_URL}/expenses/yearly/raw?year={year}"
+    columns = ["date", "merchant", "amount", "category", "payer", "split"]
+
+    try:
+        response = session.get(url)
+        response.raise_for_status()
+        data = response.json()
+
+        if not data:
+            return pd.DataFrame(columns=columns)
+
+        df = pd.DataFrame(data)
+        df["date"] = pd.to_datetime(df["date"], errors="coerce")
+        df["amount"] = pd.to_numeric(df["amount"], errors="coerce").fillna(0.0)
+        return df
+
+    except Exception as e:
+        print(f"Error fetching yearly raw expenses: {e}")
         return pd.DataFrame(columns=columns)
 
 

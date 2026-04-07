@@ -144,8 +144,9 @@ def api_set_budget():
 
 @api.route('/budget/all', methods=['GET'])
 def api_all_budgets():
-    """Returns all category-specific budget targets."""
-    data = get_all_budgets()
+    """Returns category budget targets for a given payer (default: shared)."""
+    payer = request.args.get('payer', 'shared')
+    data = get_all_budgets(payer)
     return jsonify(data)
 
 @api.route('/budget/pacing', methods=['GET'])

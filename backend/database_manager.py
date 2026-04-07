@@ -78,6 +78,27 @@ def setup_database() -> bool:
                             )
                         ''')
 
+    # Migration: add payer column and rebuild unique constraint as (category, payer).
+    # Runs only once — if payer column already exists the block is skipped.
+    cursor.execute("PRAGMA table_info(budgets)")
+    budget_cols = [row[1] for row in cursor.fetchall()]
+    if 'payer' not in budget_cols:
+        cursor.execute('''
+            CREATE TABLE budgets_v2 (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                category TEXT,
+                monthly_target REAL,
+                payer TEXT NOT NULL DEFAULT 'shared',
+                UNIQUE(category, payer)
+            )
+        ''')
+        cursor.execute('''
+            INSERT INTO budgets_v2 (category, monthly_target, payer)
+            SELECT category, monthly_target, 'shared' FROM budgets
+        ''')
+        cursor.execute('DROP TABLE budgets')
+        cursor.execute('ALTER TABLE budgets_v2 RENAME TO budgets')
+
     cursor.execute('''CREATE TABLE IF NOT EXISTS investments (
                                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                                         category TEXT CHECK(category IN('stocks', 'bonds', 'cash', 'pension', 'gemel', 'hishtalmut')),

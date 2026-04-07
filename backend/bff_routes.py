@@ -111,34 +111,43 @@ def dashboard_data():
 def budget_data():
     """Return budget targets, per-category actuals, and pacing in a single response.
 
-    Category actuals are aggregated in Python from raw expense rows to
-    avoid an extra SQL query.
+    Actuals are filtered to match the requested payer:
+      - ``shared``  → only ``split='shared'`` expenses
+      - a payer name → only ``split='personal'`` expenses for that payer
 
-    :query year: Year to query (defaults to current year).
+    :query year:  Year to query (defaults to current year).
     :query month: Month to query (defaults to current month).
+    :query payer: Whose budget to load — ``'shared'``, ``'Michael'``, ``'Ori'``, etc.
+                  Defaults to ``'shared'``.
     :returns: JSON with ``budgets``, ``category_actuals``, and ``pacing``.
     """
-    year = int(request.args.get('year', datetime.date.today().year))
+    year  = int(request.args.get('year',  datetime.date.today().year))
     month = int(request.args.get('month', datetime.date.today().month))
+    payer = request.args.get('payer', 'shared')
 
-    cache_key = f'budget:{year}:{month}'
+    cache_key = f'budget:{year}:{month}:{payer}'
     if cache_key in _cache:
         return jsonify(_cache[cache_key])
 
-    # 1. Budget targets — static, rarely changes.
-    budgets = get_all_budgets()
+    # 1. Budget targets for the requested payer.
+    budgets = get_all_budgets(payer)
 
-    # 2. One raw expense query, then aggregate by category in Python.
-    #    Raw sum (no shared/2 weighting) — matches existing budget_layout.py behaviour.
+    # 2. Filter raw expenses by payer, then aggregate by category.
     raw = get_raw_monthly_expenses(year, month)
+    if payer == 'shared':
+        filtered = [r for r in raw if r.get('split') == 'shared']
+    else:
+        filtered = [r for r in raw
+                    if r.get('split') == 'personal' and r.get('payer') == payer]
+
     category_actuals: dict = {}
-    for row in raw:
+    for row in filtered:
         cat = row['category']
         category_actuals[cat] = round(
             category_actuals.get(cat, 0.0) + float(row['amount']), 2
         )
 
-    # 3. Overall pacing status.
+    # 3. Overall pacing status (always uses the shared budget).
     pacing = check_total_pacing(year, month)
 
     data = {
