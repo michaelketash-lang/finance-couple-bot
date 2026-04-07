@@ -88,7 +88,7 @@ class ExpenseAIParser:
             f"\n2. HEBREW FIXING: If names in 'PDF CONTENT' are reversed (Visual Hebrew), you MUST flip them (e.g., 'לפא' -> 'אפל')."
             f"\n3. CATEGORIZATION: Map the expense ONLY to one of the 10 categories above. Use 'Other' only if unsure."
             f"\n4. AMOUNT: Extract the FINAL grand total to be paid as a float."
-            f"\n5. VALIDATION: Set 'is_expense' to true ONLY if it's a clear financial transaction, bill, or purchase."
+            f"\n5. VALIDATION: For EMAIL and PDF inputs, set 'is_expense' to true only if it's a clear financial transaction. For DIRECT USER MESSAGES (short text like '30 milk' or '50 Aroma'), always treat as an expense and extract the amount and merchant."
             f"\n\nSTRICT JSON OUTPUT:"
             f"\n{{'is_expense': bool, 'merchant': str, 'amount': float, 'category': str}}"
         )
