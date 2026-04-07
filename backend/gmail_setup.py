@@ -39,7 +39,7 @@ def main() -> None:
         print("❌ ERROR: credentials.json not found in the project directory.")
         return
 
-    user_name = input("Enter the user's name (michael or ori): ").strip().lower()
+    user_name = input("Enter the user's name (michael or ofri): ").strip().lower()
     token_filename = f'token_{user_name}.json'
 
     creds = None

@@ -13,6 +13,7 @@ import os
 from telebot import types
 from ai_parser import parser_service
 from database_manager import add_expense
+from bff_routes import invalidate_cache
 
 PAYER_1 = os.getenv('PAYER_1', 'Michael')
 PAYER_2 = os.getenv('PAYER_2', 'Ori')
@@ -131,6 +132,7 @@ def register_handlers(bot) -> None:
             )
 
             if success:
+                invalidate_cache()
                 print(f"[SUCCESS] Transaction saved to database.")
                 bot.edit_message_text(
                     chat_id=call.message.chat.id,

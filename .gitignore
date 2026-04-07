@@ -8,7 +8,7 @@ token_*.json
 # --- Environment Variables ---
 .env
 .env.txt
-/frontend/.env.txt
+/frontend/.env
 # --- Databases ---
 *.db
 *.db-journal
