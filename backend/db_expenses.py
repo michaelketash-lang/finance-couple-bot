@@ -8,6 +8,7 @@ Handles all expense reads and writes, including personal/shared split logic,
 per-person breakdowns, monthly settlement calculations, and yearly summaries.
 """
 
+import os
 import sqlite3
 
 
@@ -247,6 +248,11 @@ def get_monthly_settlement(year: int, month: int) -> dict:
 
         if not payments:
             return {"balanced": True, "amount": 0.0}
+
+        # Ensure both payers appear even if one paid nothing this month
+        for p in [os.getenv('PAYER_1', 'Michael'), os.getenv('PAYER_2', 'Payer2')]:
+            if not any(k.lower() == p.lower() for k in payments):
+                payments[p] = 0.0
 
         total_shared = sum(payments.values())
         fair_share = total_shared / 2.0

@@ -84,11 +84,18 @@ def register_expenses_callbacks(app: Dash) -> None:
         if split_value == "shared":
             rows = [r for r in expenses if r.get("split") == "shared"]
         else:
-            rows = [
+            personal_rows = [
                 r for r in expenses
                 if r.get("split") == "personal"
                 and r.get("payer", "").lower() == split_value.lower()
             ]
+            shared_rows = []
+            for r in expenses:
+                if r.get("split") == "shared":
+                    row_copy = dict(r)
+                    row_copy["amount"] = round(float(r.get("amount", 0)) / 2, 2)
+                    shared_rows.append(row_copy)
+            rows = personal_rows + shared_rows
 
         row_ids = [r.get("id") for r in rows]
         return rows, row_ids, rows
@@ -172,7 +179,7 @@ def register_expenses_callbacks(app: Dash) -> None:
             per_person = store.get("payer_summary", {}).get("per_person", {})
             total_spent = float(per_person.get(split_value.capitalize(), 0.0))
         else:
-            total_spent = float(kpis.get("total_spent", 0.0))
+            total_spent = float(df_pie["amount"].sum()) if not df_pie.empty else 0.0
         text_spent = f"₪{total_spent:,.0f}"
 
         if is_person_view:
