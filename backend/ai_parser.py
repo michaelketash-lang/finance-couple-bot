@@ -70,8 +70,11 @@ class ExpenseAIParser:
             "- Other: Any transaction that absolutely doesn't fit (e.g., Bank fees, broad insurance)."
         )
 
+        payer_1 = os.getenv('PAYER_1', 'Payer1')
+        payer_2 = os.getenv('PAYER_2', 'Payer2')
+
         return (
-            f"You are a strict financial data extractor for an Israeli user named Michael Ketash. "
+            f"You are a strict financial data extractor for a household expense tracker. "
             f"You will receive text from an EMAIL, a PDF document, or a DIRECT USER MESSAGE."
             f"Your mission is to identify if this is a valid expense and extract the details."
             f"\n\nSTRICT CATEGORIES TO USE:\n{categories_desc}"
@@ -81,7 +84,7 @@ class ExpenseAIParser:
             f"\n   - Check 'PDF CONTENT' for legal names (e.g., 'ח.פ', 'עוסק מורשה')."
             f"\n   - PRIORITIZE the brand/business name over the product name."
             f"\n   - IGNORE payment gateways like 'Tranzila', 'iCount', 'Cardcom', 'YaadPay', 'CreditGuard'."
-            f"\n   - NEVER use 'Michael Ketash' as the merchant; he is the customer."
+            f"\n   - NEVER use '{payer_1}' or '{payer_2}' as the merchant; they are the customers."
             f"\n2. HEBREW FIXING: If names in 'PDF CONTENT' are reversed (Visual Hebrew), you MUST flip them (e.g., 'לפא' -> 'אפל')."
             f"\n3. CATEGORIZATION: Map the expense ONLY to one of the 10 categories above. Use 'Other' only if unsure."
             f"\n4. AMOUNT: Extract the FINAL grand total to be paid as a float."

@@ -28,8 +28,8 @@ from bff_routes import bff
 from gmail_processor import GmailProcessor
 
 USER_EMAILS = {
-    os.getenv('PAYER_1_EMAIL', 'michael.ketash@gmail.com'): os.getenv('PAYER_1', 'Michael').lower(),
-    os.getenv('PAYER_2_EMAIL', 'orimac11@gmail.com'): os.getenv('PAYER_2', 'Ori').lower(),
+    os.getenv('PAYER_1_EMAIL'): os.getenv('PAYER_1', 'Payer1').lower(),
+    os.getenv('PAYER_2_EMAIL'): os.getenv('PAYER_2', 'Payer2').lower(),
 }
 
 load_dotenv()

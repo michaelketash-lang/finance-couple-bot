@@ -1,8 +1,8 @@
+import os
 import requests
 import pandas as pd
 
-# Standard base URL for production Flask development
-BASE_URL = "https://michaelketash.pythonanywhere.com/api"
+BASE_URL = os.getenv('API_BASE_URL', 'http://localhost:8000/api')
 
 # --- PRO SPEED TIP: Use a Session to reuse the TCP/SSL connection ---
 # This eliminates the SSL handshake overhead for every single request,
