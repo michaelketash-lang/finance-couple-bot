@@ -10,7 +10,10 @@ to the database.
 
 import sqlite3
 
-INVESTMENT_CATEGORIES = ['stocks', 'bonds', 'cash', 'pension', 'gemel', 'hishtalmut']
+INVESTMENT_CATEGORIES = [
+    'stocks', 'bonds', 'cash', 'pension', 'gemel', 'hishtalmut',
+    'foreign_currency', 'bank_deposit', 'money_market', 'real_estate', 'other',
+]
 
 
 def add_investment(category: str, amount: float, name: str,

@@ -25,25 +25,38 @@ PAYER_1 = os.getenv('PAYER_1', 'Michael')
 PAYER_2 = os.getenv('PAYER_2', 'Ori')
 
 # ── Investment domain constants ────────────────────────────────────────────────
-INVESTMENT_CATEGORIES = ['stocks', 'bonds', 'cash', 'pension', 'gemel', 'hishtalmut']
+INVESTMENT_CATEGORIES = [
+    'stocks', 'bonds', 'cash', 'pension', 'gemel', 'hishtalmut',
+    'foreign_currency', 'bank_deposit', 'money_market', 'real_estate', 'other',
+]
 
 INVESTMENT_DISPLAY: dict[str, str] = {
-    'stocks':      'Stocks',
-    'bonds':       'Bonds',
-    'cash':        'Cash',
-    'pension':     'Pension',
-    'gemel':       'Gemel',
-    'hishtalmut':  'Hishtalmut',
+    'stocks':           'Stocks',
+    'bonds':            'Bonds',
+    'cash':             'Cash',
+    'pension':          'Pension',
+    'gemel':            'Gemel',
+    'hishtalmut':       'Hishtalmut',
+    'foreign_currency': 'Foreign Currency',
+    'bank_deposit':     'Deposit in Bank',
+    'money_market':     'Money Market Fund',
+    'real_estate':      'Real Estate (Nadlan)',
+    'other':            'Other',
 }
 
 ALLOCATION_COLORS: dict[str, str] = {
-    'stocks':     '#3498db',   # Blue
-    'bonds':      '#e67e22',   # Orange
-    'cash':       '#9b59b6',   # Purple
-    'pension':    '#e74c3c',   # Red
-    'gemel':      '#f39c12',   # Amber
-    'hishtalmut': '#1abc9c',   # Teal
-    'pot':        '#2ecc71',   # Light green — Cash / Unallocated
+    'stocks':           '#3498db',   # Blue
+    'bonds':            '#e67e22',   # Orange
+    'cash':             '#9b59b6',   # Purple
+    'pension':          '#e74c3c',   # Red
+    'gemel':            '#f39c12',   # Amber
+    'hishtalmut':       '#1abc9c',   # Teal
+    'foreign_currency': '#16a085',   # Green-sea
+    'bank_deposit':     '#2980b9',   # Belize hole blue
+    'money_market':     '#8e44ad',   # Wisteria purple
+    'real_estate':      '#d35400',   # Pumpkin orange
+    'other':            '#7f8c8d',   # Gray
+    'pot':              '#2ecc71',   # Light green — Cash / Unallocated
 }
 
 
