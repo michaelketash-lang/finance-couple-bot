@@ -122,23 +122,20 @@ def get_investments_summary(payer: str) -> dict:
         with sqlite3.connect('finance_bot.db') as conn:
             cursor = conn.cursor()
 
-            cursor.execute(
-                'SELECT COALESCE(SUM(amount), 0) FROM investments WHERE payer = ?',
-                (payer,)
-            )
-            total_invested = float(cursor.fetchone()[0])
-
-            cursor.execute(
-                'SELECT COALESCE(SUM(amount), 0) FROM pot_transactions WHERE payer = ?',
-                (payer,)
-            )
-            pot_balance = float(cursor.fetchone()[0])
+            cursor.execute('''
+                SELECT
+                    (SELECT COALESCE(SUM(amount), 0) FROM investments WHERE payer = ?) AS total_invested,
+                    (SELECT COALESCE(SUM(amount), 0) FROM pot_transactions WHERE payer = ?) AS pot_balance
+            ''', (payer, payer))
+            row = cursor.fetchone()
+            total_invested = float(row[0])
+            pot_balance = float(row[1])
 
             cursor.execute(
                 'SELECT category, SUM(amount) FROM investments WHERE payer = ? GROUP BY category',
                 (payer,)
             )
-            allocation = {row[0]: float(row[1]) for row in cursor.fetchall()}
+            allocation = {r[0]: float(r[1]) for r in cursor.fetchall()}
 
             return {
                 'total_invested': total_invested,
@@ -174,6 +171,54 @@ def get_all_investments(payer: str) -> list:
     except sqlite3.Error as e:
         print(f"❌ Database Error fetching investments: {e}")
         return []
+
+
+def get_investments_dashboard(payer: str) -> dict:
+    """Return summary KPIs and holdings list for a payer in one DB connection."""
+    try:
+        with sqlite3.connect('finance_bot.db') as conn:
+            cursor = conn.cursor()
+
+            cursor.execute('''
+                SELECT
+                    (SELECT COALESCE(SUM(amount), 0) FROM investments WHERE payer = ?) AS total_invested,
+                    (SELECT COALESCE(SUM(amount), 0) FROM pot_transactions WHERE payer = ?) AS pot_balance
+            ''', (payer, payer))
+            row = cursor.fetchone()
+            total_invested = float(row[0])
+            pot_balance = float(row[1])
+
+            cursor.execute(
+                'SELECT category, SUM(amount) FROM investments WHERE payer = ? GROUP BY category',
+                (payer,)
+            )
+            allocation = {r[0]: float(r[1]) for r in cursor.fetchall()}
+
+            cursor.execute(
+                '''SELECT id, category, name, amount, ticker
+                   FROM investments WHERE payer = ? ORDER BY category, name''',
+                (payer,)
+            )
+            holdings = [
+                {'id': r[0], 'category': r[1], 'name': r[2], 'amount': float(r[3]), 'ticker': r[4] or ''}
+                for r in cursor.fetchall()
+            ]
+
+            return {
+                'summary': {
+                    'total_invested': total_invested,
+                    'pot_balance': pot_balance,
+                    'net_worth': total_invested + pot_balance,
+                    'allocation': allocation,
+                },
+                'holdings': holdings,
+            }
+    except sqlite3.Error as e:
+        print(f"❌ Database Error in get_investments_dashboard: {e}")
+        return {
+            'summary': {'total_invested': 0.0, 'pot_balance': 0.0, 'net_worth': 0.0, 'allocation': {}},
+            'holdings': [],
+        }
 
 
 def update_investment(inv_id: int, amount: float, name: str,

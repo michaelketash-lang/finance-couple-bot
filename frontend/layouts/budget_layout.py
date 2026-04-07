@@ -22,7 +22,7 @@ from dash import Dash, Input, Output, State, dcc, html
 
 from components.cards import budget_progress_card
 from components.tables import budgets_datatable
-from api_client import fetch_budget_bff, save_category_budget, CATEGORIES
+from api_client import fetch_budget_bff, save_budgets_batch, CATEGORIES
 
 
 @dataclass(frozen=True)
@@ -256,16 +256,12 @@ def register_budget_callbacks(app: Dash) -> None:
         if not table_data:
             return "Nothing to save."
 
-        failed = []
-        for row in table_data:
-            category = row.get("category")
-            target = row.get("monthly_target", 0.0)
-            if category is None:
-                continue
-            success = save_category_budget(category, float(target))
-            if not success:
-                failed.append(category)
+        budgets = [
+            {"category": row["category"], "monthly_target": float(row.get("monthly_target", 0.0))}
+            for row in table_data if row.get("category")
+        ]
 
-        if failed:
-            return f"Failed to save: {', '.join(failed)}"
-        return f"✓ Saved {len(table_data)} categories"
+        success = save_budgets_batch(budgets)
+        if success:
+            return f"✓ Saved {len(budgets)} categories"
+        return "Failed to save budgets."

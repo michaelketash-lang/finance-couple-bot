@@ -15,6 +15,26 @@ import calendar
 from db_expenses import get_total_monthly_expenses
 
 
+def set_budgets_batch(budgets: list[dict]) -> bool:
+    """Insert or update budget targets for multiple categories in one transaction.
+
+    :param budgets: List of ``{"category": str, "monthly_target": float}`` dicts.
+    :returns: ``True`` on success, ``False`` on error.
+    """
+    try:
+        with sqlite3.connect('finance_bot.db') as conn:
+            cursor = conn.cursor()
+            cursor.executemany(
+                'INSERT OR REPLACE INTO budgets (category, monthly_target) VALUES (?, ?)',
+                [(b['category'], float(b['monthly_target'])) for b in budgets]
+            )
+            conn.commit()
+            return True
+    except sqlite3.Error as e:
+        print(f"❌ Database Error in set_budgets_batch: {e}")
+        return False
+
+
 def set_category_budget(category: str, monthly_target: float) -> bool:
     """Insert or update the monthly budget target for a category.
 
@@ -82,16 +102,36 @@ def check_total_pacing(year: int, month: int) -> dict:
     :returns: A dict with ``status`` (``'Over Budget'``, ``'On Track'``, or
               ``'No Budget Set'``) and ``amount`` (the surplus or deficit in ILS).
     """
-    total_budget = get_total_budget()
-    total_spent = get_total_monthly_expenses(year, month)
+    try:
+        with sqlite3.connect('finance_bot.db') as conn:
+            cursor = conn.cursor()
 
-    if total_budget == 0.0:
+            cursor.execute("SELECT COALESCE(SUM(monthly_target), 0) FROM budgets")
+            total_budget = float(cursor.fetchone()[0])
+
+            if total_budget == 0.0:
+                return {"status": "No Budget Set", "amount": 0.0}
+
+            month_filter = f"{year:04d}-{month:02d}%"
+            cursor.execute('''
+                SELECT SUM(
+                    CASE
+                        WHEN split = 'personal' THEN amount
+                        WHEN split = 'shared' THEN amount / 2.0
+                        ELSE 0
+                    END
+                )
+                FROM expenses WHERE created_at LIKE ?
+            ''', (month_filter,))
+            result = cursor.fetchone()[0]
+            total_spent = round(result, 2) if result is not None else 0.0
+
+    except sqlite3.Error as e:
+        print(f"❌ Database Error in check_total_pacing: {e}")
         return {"status": "No Budget Set", "amount": 0.0}
 
     today = datetime.date.today()
-
     if today.year == year and today.month == month:
-        # Project end-of-month spend from the daily average so far
         current_day = today.day
         days_in_month = calendar.monthrange(year, month)[1]
         projected_total = (total_spent / current_day) * days_in_month
@@ -101,5 +141,4 @@ def check_total_pacing(year: int, month: int) -> dict:
 
     if difference > 0:
         return {"status": "Over Budget", "amount": round(difference, 2)}
-    else:
-        return {"status": "On Track", "amount": round(abs(difference), 2)}
+    return {"status": "On Track", "amount": round(abs(difference), 2)}

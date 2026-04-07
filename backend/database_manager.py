@@ -34,6 +34,7 @@ from db_expenses import (
 )
 from db_budgets import (
     set_category_budget,
+    set_budgets_batch,
     get_total_budget,
     get_all_budgets,
     check_total_pacing,
@@ -45,6 +46,7 @@ from db_investments import (
     get_pot_balance,
     get_investments_summary,
     get_all_investments,
+    get_investments_dashboard,
     update_investment,
 )
 from db_insights import get_ai_context_data

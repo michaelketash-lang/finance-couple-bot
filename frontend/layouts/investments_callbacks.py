@@ -25,8 +25,7 @@ import plotly.graph_objects as go
 from dash import Dash, Input, Output, State, ctx, html, no_update
 
 from api_client import (
-    fetch_investments_summary,
-    fetch_all_investments,
+    fetch_investments_dashboard,
     fetch_all_budgets,
     fetch_raw_expenses,
     add_funds_to_pot,
@@ -153,13 +152,14 @@ def register_investments_callbacks(app: Dash) -> None:
         Input(ids.surplus_store,   "data"),
     )
     def _update_main_display(payer, _add, _new, _edit, _surplus):
-        summary    = fetch_investments_summary(payer)
+        data       = fetch_investments_dashboard(payer)
+        summary    = data.get('summary', {})
         allocation = summary.get('allocation', {})
         pot        = summary.get('pot_balance', 0.0)
 
         fmt  = lambda v: f"₪{v:,.0f}"
         fig  = _build_donut_chart(allocation, pot, payer)
-        rows = fetch_all_investments(payer)
+        rows = data.get('holdings', [])
 
         table_data = [
             {**r, "category_display": INVESTMENT_DISPLAY.get(r["category"], r["category"])}

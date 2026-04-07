@@ -139,6 +139,18 @@ def fetch_yearly_summary(year: int, split: str = "shared") -> dict:
         return {}
 
 
+def save_budgets_batch(budgets: list[dict]) -> bool:
+    """Saves all category budgets in one POST request."""
+    url = f"{BASE_URL}/budget/batch"
+    try:
+        response = session.post(url, json={"budgets": budgets})
+        response.raise_for_status()
+        return response.json().get("success", False)
+    except Exception as e:
+        print(f"Error saving budgets batch: {e}")
+        return False
+
+
 def save_category_budget(category: str, monthly_target: float) -> bool:
     """
     Saves (upserts) a monthly budget target for a single category.
@@ -236,6 +248,21 @@ def fetch_budget_pacing(year: int, month: int) -> dict:
     except Exception as e:
         print(f"Error fetching budget pacing: {e}")
         return {"status": "Error", "amount": 0.0}
+
+
+def fetch_investments_dashboard(payer: str) -> dict:
+    """Fetches summary KPIs and holdings list for a payer in one request."""
+    url = f"{BASE_URL}/investments/dashboard?payer={payer}"
+    try:
+        response = session.get(url)
+        response.raise_for_status()
+        return response.json()
+    except Exception as e:
+        print(f"Error fetching investments dashboard: {e}")
+        return {
+            'summary': {'total_invested': 0.0, 'pot_balance': 0.0, 'net_worth': 0.0, 'allocation': {}},
+            'holdings': [],
+        }
 
 
 def fetch_investments_summary(payer: str) -> dict:

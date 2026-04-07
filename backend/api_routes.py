@@ -5,6 +5,7 @@ from bff_routes import invalidate_cache
 from database_manager import (
     add_expense,
     set_category_budget,
+    set_budgets_batch,
     add_investment,
     add_to_pot,
     log_new_investment,
@@ -21,7 +22,8 @@ from database_manager import (
     get_all_budgets,
     get_raw_monthly_expenses, get_raw_yearly_expenses, get_yearly_summary,
     get_spending_per_person_per_month, get_monthly_settlement, get_personal_monthly_totals,
-    update_expense_category, update_expense
+    update_expense_category, update_expense,
+    get_investments_dashboard,
 )
 import gspread
 import calendar
@@ -117,6 +119,19 @@ def api_shared_monthly_totals():
 #                                             BUDGET ROUTES                                                     #
 # ==============================================================================================================#
 
+@api.route('/budget/batch', methods=['POST'])
+def api_set_budgets_batch():
+    """Sets or updates budget targets for all categories in one request."""
+    data = request.json
+    budgets = data.get('budgets', [])
+    if not budgets:
+        return jsonify({"error": "budgets array is required"}), 400
+    success = set_budgets_batch(budgets)
+    if success:
+        invalidate_cache()
+    return jsonify({"success": success})
+
+
 @api.route('/budget', methods=['POST'])
 def api_set_budget():
     """Sets or updates a budget target for a specific category."""
@@ -157,6 +172,13 @@ def api_add_investment():
         expense_ratio=data.get('expense_ratio')
     )
     return jsonify({"success": success})
+
+
+@api.route('/investments/dashboard', methods=['GET'])
+def api_investments_dashboard():
+    """Returns summary KPIs and holdings list for a payer in one request."""
+    payer = request.args.get('payer', 'Michael')
+    return jsonify(get_investments_dashboard(payer))
 
 
 @api.route('/investments/summary', methods=['GET'])
