@@ -38,7 +38,7 @@ load_dotenv()
 TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
 MY_CHAT_ID = os.getenv('MY_CHAT_ID')
 
-apihelper.proxy = {'https': 'https://proxy.server:3128'}
+apihelper.proxy = {'https': 'http://proxy.server:3128'}
 bot = telebot.TeleBot(TELEGRAM_TOKEN, threaded=False)
 app = Flask(__name__)
 CORS(app)
