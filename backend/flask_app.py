@@ -16,6 +16,7 @@ import os
 import base64
 import json
 import telebot
+from telebot import apihelper
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from telebot import types
@@ -37,6 +38,7 @@ load_dotenv()
 TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
 MY_CHAT_ID = os.getenv('MY_CHAT_ID')
 
+apihelper.proxy = {'https': 'https://proxy.server:3128'}
 bot = telebot.TeleBot(TELEGRAM_TOKEN, threaded=False)
 app = Flask(__name__)
 CORS(app)
