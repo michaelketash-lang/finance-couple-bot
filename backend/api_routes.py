@@ -231,8 +231,8 @@ def api_add_funds_to_pot():
     data = request.json
     amount = data.get('amount')
     payer = data.get('payer', 'Michael')
-    if not amount or float(amount) <= 0:
-        return jsonify({"error": "amount must be a positive number"}), 400
+    if amount is None or float(amount) == 0:
+        return jsonify({"error": "amount must be a non-zero number"}), 400
     success = add_to_pot(amount=float(amount), payer=payer, note=data.get('note'))
     return jsonify({"success": success})
 
