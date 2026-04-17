@@ -123,6 +123,10 @@ class _Ids:
     edit_inv_ticker:          str = "inv-edit-ticker"
     edit_inv_submit_btn:      str = "inv-edit-submit-btn"
     edit_inv_status:          str = "inv-edit-status"
+    # Delete investment
+    delete_inv_btn:   str = "inv-delete-btn"
+    delete_inv_store: str = "inv-delete-store"
+    delete_inv_status: str = "inv-delete-status"
 
 
 # ── Private UI component builders ──────────────────────────────────────────────
@@ -340,6 +344,7 @@ def get_investments_layout() -> dbc.Container:
             dcc.Store(id=ids.edit_inv_store,  data=0),
             dcc.Store(id=ids.surplus_store,   data=0),
             dcc.Store(id=ids.edit_inv_id_store, data=None),
+            dcc.Store(id=ids.delete_inv_store, data=0),
 
             # ── Modals (in DOM from initial render, toggled via is_open) ──────
             _add_funds_modal(ids),
@@ -418,13 +423,22 @@ def get_investments_layout() -> dbc.Container:
                                 [
                                     html.H5("Current Holdings",
                                             className="fw-bold text-muted mb-0"),
-                                    dbc.Button("✏️ Edit Selected",
-                                               id=ids.edit_inv_open_btn,
-                                               color="warning", size="sm",
-                                               disabled=True, n_clicks=0),
+                                    html.Div([
+                                        dbc.Button("✏️ Edit Selected",
+                                                   id=ids.edit_inv_open_btn,
+                                                   color="warning", size="sm",
+                                                   disabled=True, n_clicks=0),
+                                        dbc.Button("🗑️ Delete Selected",
+                                                   id=ids.delete_inv_btn,
+                                                   color="danger", size="sm",
+                                                   disabled=True, n_clicks=0,
+                                                   className="ms-2"),
+                                    ], className="d-flex"),
                                 ],
                                 className="d-flex justify-content-between align-items-center mb-3",
                             ),
+                            html.Div(id=ids.delete_inv_status,
+                                     className="mb-2 small text-success"),
                             _holdings_table(ids),
                         ],
                         className="bg-white p-4 rounded shadow-sm",

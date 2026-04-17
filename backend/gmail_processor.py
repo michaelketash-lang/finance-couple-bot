@@ -12,6 +12,7 @@ downstream AI parsing.
 import base64
 import os
 import pdfplumber
+from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 
@@ -44,16 +45,21 @@ class GmailProcessor:
         ]
 
     def _load_credentials(self) -> Credentials:
-        """Load OAuth credentials from the user's token file.
+        """Load OAuth credentials from the user's token file, refreshing if expired.
 
         :returns: A ``Credentials`` object for the Gmail API.
         :raises FileNotFoundError: If ``token_{username}.json`` is missing.
         """
         token_filename = f'token_{self.username}.json'
-        if os.path.exists(token_filename):
-            return Credentials.from_authorized_user_file(token_filename, SCOPES)
-        else:
+        if not os.path.exists(token_filename):
             raise FileNotFoundError(f"{token_filename} missing.")
+
+        creds = Credentials.from_authorized_user_file(token_filename, SCOPES)
+        if not creds.valid and creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+            with open(token_filename, 'w') as f:
+                f.write(creds.to_json())
+        return creds
 
     def _get_latest_message_meta(self) -> dict | None:
         """Fetch the metadata of the most recent message in the inbox.

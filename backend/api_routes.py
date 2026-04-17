@@ -12,6 +12,7 @@ from database_manager import (
     get_investments_summary,
     get_all_investments,
     update_investment,
+    delete_investment,
     get_total_monthly_expenses,
     get_average_total_monthly_expenses,
     get_monthly_expenses_by_category,
@@ -194,6 +195,15 @@ def api_get_all_investments():
     """Returns all investment records for a specific payer."""
     payer = request.args.get('payer', 'Michael')
     return jsonify(get_all_investments(payer))
+
+
+@api.route('/investments/<int:inv_id>', methods=['DELETE'])
+def api_delete_investment(inv_id):
+    """Deletes an investment record and refunds its amount to the payer's Pot."""
+    success = delete_investment(inv_id)
+    if not success:
+        return jsonify({"error": "Investment not found"}), 404
+    return jsonify({"success": True})
 
 
 @api.route('/investments/<int:inv_id>', methods=['PUT'])

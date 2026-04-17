@@ -31,6 +31,7 @@ from api_client import (
     add_funds_to_pot,
     log_investment,
     update_investment_record,
+    delete_investment_record,
 )
 from layouts.investments_layout import (
     _Ids,
@@ -146,12 +147,13 @@ def register_investments_callbacks(app: Dash) -> None:
         Output(ids.donut_chart,    "figure"),
         Output(ids.holdings_table, "data"),
         Input(ids.payer_radio,    "value"),
-        Input(ids.add_funds_store, "data"),
-        Input(ids.new_inv_store,   "data"),
-        Input(ids.edit_inv_store,  "data"),
-        Input(ids.surplus_store,   "data"),
+        Input(ids.add_funds_store,  "data"),
+        Input(ids.new_inv_store,    "data"),
+        Input(ids.edit_inv_store,   "data"),
+        Input(ids.surplus_store,    "data"),
+        Input(ids.delete_inv_store, "data"),
     )
-    def _update_main_display(payer, _add, _new, _edit, _surplus):
+    def _update_main_display(payer, _add, _new, _edit, _surplus, _delete):
         data       = fetch_investments_dashboard(payer)
         summary    = data.get('summary', {})
         allocation = summary.get('allocation', {})
@@ -244,13 +246,38 @@ def register_investments_callbacks(app: Dash) -> None:
         return html.Span("Failed to transfer. Please try again.",
                          className="text-danger"), ts
 
-    # ── 4. Gate the Edit button on whether a table row is selected ────────────
+    # ── 4. Gate the Edit and Delete buttons on whether a table row is selected ─
     @app.callback(
         Output(ids.edit_inv_open_btn, "disabled"),
+        Output(ids.delete_inv_btn,    "disabled"),
         Input(ids.holdings_table, "selected_rows"),
     )
-    def _toggle_edit_btn(selected_rows):
-        return not bool(selected_rows)
+    def _toggle_action_btns(selected_rows):
+        disabled = not bool(selected_rows)
+        return disabled, disabled
+
+    # ── 4b. Delete the selected investment and refund to Pot ──────────────────
+    @app.callback(
+        Output(ids.delete_inv_status, "children"),
+        Output(ids.delete_inv_store,  "data"),
+        Input(ids.delete_inv_btn, "n_clicks"),
+        State(ids.holdings_table, "selected_rows"),
+        State(ids.holdings_table, "data"),
+        State(ids.delete_inv_store, "data"),
+        prevent_initial_call=True,
+    )
+    def _delete_investment(n_clicks, selected_rows, table_data, ts):
+        if not selected_rows or not table_data:
+            return "Select a row first.", ts
+        row = table_data[selected_rows[0]]
+        inv_id = row.get("id")
+        if not inv_id:
+            return "Could not identify the selected investment.", ts
+        success = delete_investment_record(inv_id)
+        if success:
+            name = row.get("name", "Investment")
+            return f"✓ '{name}' deleted and amount refunded to Pot.", ts + 1
+        return "Failed to delete. Please try again.", ts
 
     # ── 5. Add Funds modal — open / validate / submit ─────────────────────────
     @app.callback(

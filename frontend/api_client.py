@@ -353,6 +353,18 @@ def log_investment(category: str, amount: float, name: str, payer: str,
         return False
 
 
+def delete_investment_record(inv_id: int) -> bool:
+    """Deletes an investment and refunds its amount to the payer's Pot."""
+    url = f"{BASE_URL}/investments/{inv_id}"
+    try:
+        response = session.delete(url)
+        response.raise_for_status()
+        return response.json().get("success", False)
+    except Exception as e:
+        print(f"Error deleting investment {inv_id}: {e}")
+        return False
+
+
 def update_investment_record(inv_id: int, amount: float, name: str,
                              ticker: str = None) -> bool:
     """Updates an existing investment's amount, name, and ticker."""

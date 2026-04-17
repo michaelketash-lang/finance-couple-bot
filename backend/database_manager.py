@@ -48,6 +48,7 @@ from db_investments import (
     get_all_investments,
     get_investments_dashboard,
     update_investment,
+    delete_investment,
 )
 from db_insights import get_ai_context_data
 
@@ -101,13 +102,33 @@ def setup_database() -> bool:
 
     cursor.execute('''CREATE TABLE IF NOT EXISTS investments (
                                         id INTEGER PRIMARY KEY AUTOINCREMENT,
-                                        category TEXT CHECK(category IN('stocks', 'bonds', 'cash', 'pension', 'gemel', 'hishtalmut')),
+                                        category TEXT,
                                         amount REAL,
                                         name TEXT,
                                         ticker TEXT DEFAULT NULL,
                                         expense_ratio REAL DEFAULT NULL
                                         )
                                     ''')
+
+    # Migration: expand the investments CHECK constraint to include new categories.
+    # Detects the old constraint by inspecting the schema and recreates the table if needed.
+    cursor.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='investments'")
+    investments_schema = cursor.fetchone()
+    if investments_schema and "CHECK" in investments_schema[0]:
+        cursor.execute('''
+            CREATE TABLE investments_v2 (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                category TEXT,
+                amount REAL,
+                name TEXT,
+                ticker TEXT DEFAULT NULL,
+                expense_ratio REAL DEFAULT NULL,
+                payer TEXT
+            )
+        ''')
+        cursor.execute('INSERT INTO investments_v2 SELECT id, category, amount, name, ticker, expense_ratio, payer FROM investments')
+        cursor.execute('DROP TABLE investments')
+        cursor.execute('ALTER TABLE investments_v2 RENAME TO investments')
 
     cursor.execute('''CREATE TABLE IF NOT EXISTS pot_transactions (
                                         id INTEGER PRIMARY KEY AUTOINCREMENT,

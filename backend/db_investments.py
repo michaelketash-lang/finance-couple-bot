@@ -94,8 +94,6 @@ def log_new_investment(category: str, amount: float, name: str, payer: str,
             )
             conn.commit()
             return True
-    except sqlite3.IntegrityError as e:
-        print(f"❌ Validation Error: ({e})")
     except sqlite3.Error as e:
         print(f"❌ Database Error logging investment: {e}")
     return False
@@ -222,6 +220,33 @@ def get_investments_dashboard(payer: str) -> dict:
             'summary': {'total_invested': 0.0, 'pot_balance': 0.0, 'net_worth': 0.0, 'allocation': {}},
             'holdings': [],
         }
+
+
+def delete_investment(inv_id: int) -> bool:
+    """Delete an investment record and refund its amount back to the payer's Pot.
+
+    :param inv_id: The investment record ID to delete.
+    :returns: ``True`` on success, ``False`` if the record was not found or a DB error occurred.
+    """
+    try:
+        with sqlite3.connect('finance_bot.db') as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT amount, payer FROM investments WHERE id = ?', (inv_id,))
+            row = cursor.fetchone()
+            if not row:
+                print(f"❌ Investment id={inv_id} not found.")
+                return False
+            amount, payer = row
+            cursor.execute('DELETE FROM investments WHERE id = ?', (inv_id,))
+            cursor.execute(
+                'INSERT INTO pot_transactions (amount, payer, note) VALUES (?, ?, ?)',
+                (float(amount), payer, f"Refund: deleted investment id={inv_id}")
+            )
+            conn.commit()
+            return True
+    except sqlite3.Error as e:
+        print(f"❌ Database Error deleting investment: {e}")
+        return False
 
 
 def update_investment(inv_id: int, amount: float, name: str,
