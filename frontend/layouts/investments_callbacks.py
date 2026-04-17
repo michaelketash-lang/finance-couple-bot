@@ -301,12 +301,18 @@ def register_investments_callbacks(app: Dash) -> None:
             return not is_open, "", ts
 
         if triggered == ids.add_funds_submit_btn:
-            if not amount or float(amount) <= 0:
-                return True, "Please enter a valid amount greater than 0.", ts
-            success = add_funds_to_pot(float(amount), payer, note or None)
+            if amount is None or float(amount) == 0:
+                return True, "Please enter a non-zero amount.", ts
+            amt = float(amount)
+            if amt < 0:
+                data = fetch_investments_dashboard(payer)
+                pot_balance = data.get('summary', {}).get('pot_balance', 0.0)
+                if abs(amt) > pot_balance:
+                    return True, f"Cannot remove ₪{abs(amt):,.0f} — Pot only has ₪{pot_balance:,.0f}.", ts
+            success = add_funds_to_pot(amt, payer, note or None)
             if success:
                 return False, "", ts + 1
-            return True, "Failed to add funds. Please try again.", ts
+            return True, "Failed to adjust pot. Please try again.", ts
 
         return is_open, "", ts
 

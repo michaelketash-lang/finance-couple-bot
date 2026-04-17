@@ -158,18 +158,20 @@ def _kpi_card(label: str, value_id: str, icon: str, accent: str) -> dbc.Col:
 def _add_funds_modal(ids: _Ids) -> dbc.Modal:
     return dbc.Modal(
         [
-            dbc.ModalHeader(dbc.ModalTitle("💰 Add Funds to Pot")),
+            dbc.ModalHeader(dbc.ModalTitle("💰 Adjust Pot Balance")),
             dbc.ModalBody([
                 dbc.Label("Amount (₪)", className="fw-medium"),
                 dbc.Input(id=ids.add_funds_amount, type="number",
-                          placeholder="e.g. 3000", min=1, step=1),
+                          placeholder="e.g. 3000 to add, -500 to remove", step=1),
+                html.P("Use a negative number to remove funds from the Pot.",
+                       className="text-muted small mt-1 mb-0"),
                 dbc.Label("Note (optional)", className="fw-medium mt-3"),
                 dbc.Input(id=ids.add_funds_note, type="text",
                           placeholder="e.g. December bonus"),
                 html.Div(id=ids.add_funds_status, className="mt-3 small text-danger"),
             ]),
             dbc.ModalFooter(
-                dbc.Button("Add Funds", id=ids.add_funds_submit_btn,
+                dbc.Button("Confirm", id=ids.add_funds_submit_btn,
                            color="success", n_clicks=0)
             ),
         ],
@@ -397,7 +399,7 @@ def get_investments_layout() -> dbc.Container:
                             html.H5("Actions", className="fw-bold text-muted mb-3"),
                             html.Div(
                                 [
-                                    dbc.Button("➕ Add Funds", id=ids.add_funds_open_btn,
+                                    dbc.Button("💰 Adjust Pot", id=ids.add_funds_open_btn,
                                                color="success", size="lg",
                                                className="px-4", n_clicks=0),
                                     dbc.Button("📊 New Investment", id=ids.new_inv_open_btn,
