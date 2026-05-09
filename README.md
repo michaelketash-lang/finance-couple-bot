@@ -6,7 +6,7 @@
 
 ## What It Does
 
-Michael and Ori share expenses. This system automatically captures transactions from Gmail receipts, card alerts, and manual Telegram input — parses them with GPT-4o — and displays everything on a live dashboard with charts, budget tracking, and settlement calculations.
+Michael and Ofri share expenses. This system automatically captures transactions from Gmail receipts, card alerts, and manual Telegram input — parses them with GPT-4o — and displays everything on a live dashboard with charts, budget tracking, and settlement calculations.
 
 ## Features
 
