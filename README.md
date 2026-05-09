@@ -51,7 +51,20 @@ Gmail / Card App / Telegram
 
 ## Screenshots
 
-> Add screenshots here
+### Expenses
+| | |
+|:---:|:---:|
+| ![](screenshots/expenses_1.png) | ![](screenshots/expenses_2.png) |
+
+### Budget Tracking
+| | |
+|:---:|:---:|
+| ![](screenshots/budget_1.png) | ![](screenshots/budget_2.png) |
+
+### Investments
+| | |
+|:---:|:---:|
+| ![](screenshots/investments_1.png) | ![](screenshots/investments_2.png) |
 
 ## Setup
 
@@ -106,7 +119,3 @@ This project is fully configurable — anyone can run their own instance for the
 4. Run `gmail_setup.py` to authorize Gmail access for both accounts
 5. Upload your `service_account.json` to PythonAnywhere
 
-## Live Demo
-
-- **Dashboard:** https://finance-couple-bot.onrender.com
-- **Backend API:** https://michaelketash.pythonanywhere.com/api
