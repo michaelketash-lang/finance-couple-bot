@@ -28,12 +28,12 @@ from api_routes import api
 from bff_routes import bff
 from gmail_processor import GmailProcessor
 
+load_dotenv()
+
 USER_EMAILS = {
     os.getenv('PAYER_1_EMAIL'): os.getenv('PAYER_1', 'Payer1').lower(),
     os.getenv('PAYER_2_EMAIL'): os.getenv('PAYER_2', 'Payer2').lower(),
 }
-
-load_dotenv()
 
 TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
 MY_CHAT_ID = os.getenv('MY_CHAT_ID')
