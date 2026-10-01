@@ -137,11 +137,11 @@ def category_pie_chart(df: pd.DataFrame = None,
 
     fig.update_layout(
         title=f"Breakdown: ₪{total_spent:,.0f}" if total_spent > 0 else "Breakdown",
-        margin=dict(l=10, r=10, t=90, b=10),
+        margin=dict(l=10, r=10, t=50, b=100),
         legend=dict(
             orientation="h",
-            yanchor="bottom",
-            y=1.05,
+            yanchor="top",
+            y=-0.15,
             xanchor="center",
             x=0.5,
             font=dict(size=10),

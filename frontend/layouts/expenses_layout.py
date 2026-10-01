@@ -243,7 +243,6 @@ def get_expenses_layout() -> dbc.Container:
                             className="bg-white p-3 rounded shadow-sm h-100",
                         ),
                         md=6, xs=12,
-                        className="desktop-only",
                     ),
                 ],
                 className="mb-4",

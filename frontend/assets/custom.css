@@ -173,6 +173,11 @@
     line-height: 1;
   }
 
+  /* --- Monthly trends chart: compact height on mobile --- */
+  #expenses-monthly-trends {
+    height: 220px !important;
+  }
+
   /* --- Table container --- */
   .dash-spreadsheet-container {
     border-radius: var(--ru-radius-sm) !important;
