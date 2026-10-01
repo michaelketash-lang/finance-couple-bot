@@ -152,6 +152,16 @@ def setup_database() -> bool:
                                         )
                                     ''')
 
+    cursor.execute('''CREATE TABLE IF NOT EXISTS pending_transactions (
+                                        txn_id TEXT PRIMARY KEY,
+                                        merchant TEXT,
+                                        amount REAL,
+                                        category TEXT,
+                                        payer TEXT,
+                                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                                        )
+                                    ''')
+
     # Migration: add payer column to investments and pot_transactions if not present.
     # Safe to run every startup — the except silently skips if already exists.
     for table in ('investments', 'pot_transactions'):
@@ -194,6 +204,52 @@ def mark_email_processed(msg_id: str) -> None:
             conn.commit()
     except sqlite3.Error as e:
         print(f"❌ Database Error in mark_email_processed: {e}")
+
+
+def save_pending_txn(txn_id: str, merchant: str, amount: float, category: str, payer: str) -> None:
+    """Persist a pending transaction to the database so it survives app restarts.
+
+    :param txn_id: Short unique ID generated for this transaction.
+    """
+    try:
+        with sqlite3.connect('finance_bot.db') as conn:
+            conn.execute(
+                'INSERT OR REPLACE INTO pending_transactions (txn_id, merchant, amount, category, payer) VALUES (?, ?, ?, ?, ?)',
+                (txn_id, merchant, amount, category, payer)
+            )
+    except sqlite3.Error as e:
+        print(f"❌ Database Error in save_pending_txn: {e}")
+
+
+def load_pending_txn(txn_id: str) -> dict | None:
+    """Load a pending transaction from the database by its ID.
+
+    :param txn_id: Short unique ID to look up.
+    :returns: Dict with merchant, amount, category, payer keys, or ``None`` if not found.
+    """
+    try:
+        with sqlite3.connect('finance_bot.db') as conn:
+            conn.row_factory = sqlite3.Row
+            row = conn.execute(
+                'SELECT merchant, amount, category, payer FROM pending_transactions WHERE txn_id = ?',
+                (txn_id,)
+            ).fetchone()
+            return dict(row) if row else None
+    except sqlite3.Error as e:
+        print(f"❌ Database Error in load_pending_txn: {e}")
+        return None
+
+
+def delete_pending_txn(txn_id: str) -> None:
+    """Remove a pending transaction from the database after it has been acted on.
+
+    :param txn_id: Short unique ID to delete.
+    """
+    try:
+        with sqlite3.connect('finance_bot.db') as conn:
+            conn.execute('DELETE FROM pending_transactions WHERE txn_id = ?', (txn_id,))
+    except sqlite3.Error as e:
+        print(f"❌ Database Error in delete_pending_txn: {e}")
 
 
 if __name__ == '__main__':

@@ -14,7 +14,7 @@ import os
 import uuid
 from telebot import types
 from ai_parser import parser_service
-from database_manager import add_expense
+from database_manager import add_expense, save_pending_txn, load_pending_txn, delete_pending_txn
 from bff_routes import invalidate_cache
 
 PAYER_1 = os.getenv('PAYER_1', 'Michael')
@@ -42,12 +42,14 @@ def send_transaction_ui(bot, chat_id: str | int, merchant: str, amount: float,
     # Store full transaction data server-side — put only a short ID in the callback
     # to avoid Telegram's 64-byte callback data limit and preserve full merchant names
     txn_id = uuid.uuid4().hex[:8]
-    _pending[txn_id] = {
+    txn_data = {
         'merchant': str(merchant).strip(),
         'amount': float(amount),
         'category': str(category).strip(),
         'payer': str(payer).strip(),
     }
+    _pending[txn_id] = txn_data
+    save_pending_txn(txn_id, txn_data['merchant'], txn_data['amount'], txn_data['category'], txn_data['payer'])
 
     cb_shared = f"shrd|{txn_id}"
     cb_priv   = f"priv|{txn_id}"
@@ -127,9 +129,13 @@ def register_handlers(bot) -> None:
             txn = _pending.pop(txn_id, None)
 
             if not txn:
+                txn = load_pending_txn(txn_id)
+
+            if not txn:
                 bot.answer_callback_query(call.id, "This button has expired. Please re-send the transaction.")
                 return
 
+            delete_pending_txn(txn_id)
             merchant       = txn['merchant']
             amount         = txn['amount']
             category       = txn['category']
