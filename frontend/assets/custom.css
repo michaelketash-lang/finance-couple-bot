@@ -1,0 +1,173 @@
+/* ============================================================
+   MOBILE-ONLY: Rise Up-inspired design
+   All rules are inside @media (max-width: 768px).
+   Desktop is completely untouched.
+   ============================================================ */
+
+/* Bottom nav is hidden on desktop by default */
+.bottom-nav { display: none; }
+
+@media (max-width: 768px) {
+
+  /* --- Design tokens --- */
+  :root {
+    --ru-bg:           #F7F5F0;
+    --ru-surface:      #FFFFFF;
+    --ru-green:        #1B5E3B;
+    --ru-green-light:  #52B788;
+    --ru-mint:         #95D5B2;
+    --ru-terracotta:   #D4775E;
+    --ru-amber:        #E9A84C;
+    --ru-text:         #1A1A1A;
+    --ru-muted:        #7A7A7A;
+    --ru-border:       #EAE6DF;
+    --ru-radius:       20px;
+    --ru-radius-sm:    12px;
+    --ru-shadow:       0 2px 16px rgba(0,0,0,0.07);
+  }
+
+  /* --- Global --- */
+  body {
+    background-color: var(--ru-bg) !important;
+    font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif !important;
+    color: var(--ru-text) !important;
+  }
+
+  /* --- Hide desktop sidebar --- */
+  .sidebar-wrap {
+    display: none !important;
+  }
+
+  /* --- Content: remove sidebar margin, pad bottom for nav bar --- */
+  .content-wrap {
+    margin-left: 0 !important;
+    padding: 16px 14px 90px 14px !important;
+    background-color: var(--ru-bg) !important;
+  }
+
+  /* --- Cards --- */
+  .card,
+  .bg-white {
+    border-radius: var(--ru-radius) !important;
+    box-shadow: var(--ru-shadow) !important;
+    border: none !important;
+    background: var(--ru-surface) !important;
+  }
+
+  .card-header {
+    background: transparent !important;
+    border-bottom: 1px solid var(--ru-border) !important;
+    border-radius: var(--ru-radius) var(--ru-radius) 0 0 !important;
+    padding: 14px 18px 12px !important;
+    font-size: 0.72rem !important;
+    letter-spacing: 0.05em !important;
+  }
+
+  /* --- KPI numbers --- */
+  h3.fw-bold {
+    font-size: 1.9rem !important;
+    letter-spacing: -0.03em;
+  }
+
+  /* --- Typography --- */
+  .text-muted     { color: var(--ru-muted) !important; }
+  .text-primary   { color: var(--ru-green) !important; }
+  .text-success   { color: var(--ru-green-light) !important; }
+  .text-danger    { color: var(--ru-terracotta) !important; }
+  .text-info      { color: var(--ru-green-light) !important; }
+  .text-secondary { color: var(--ru-muted) !important; }
+
+  /* --- Progress bars --- */
+  .progress {
+    background-color: var(--ru-border) !important;
+    border-radius: 100px !important;
+    height: 8px !important;
+  }
+  .progress-bar                  { border-radius: 100px !important; }
+  .bg-success, .progress-bar.bg-success { background-color: var(--ru-green-light) !important; }
+  .bg-warning, .progress-bar.bg-warning { background-color: var(--ru-amber) !important; }
+  .bg-danger,  .progress-bar.bg-danger  { background-color: var(--ru-terracotta) !important; }
+  .bg-primary, .progress-bar.bg-primary { background-color: var(--ru-green) !important; }
+  .bg-info,    .progress-bar.bg-info    { background-color: var(--ru-green-light) !important; }
+
+  /* --- Month tabs (scrollable) --- */
+  .nav-tabs {
+    border-bottom: 2px solid var(--ru-border) !important;
+    flex-wrap: nowrap !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .nav-tabs::-webkit-scrollbar { display: none; }
+
+  .nav-tabs .nav-link {
+    color: var(--ru-muted) !important;
+    border: none !important;
+    border-radius: 0 !important;
+    font-weight: 500 !important;
+    font-size: 0.78rem !important;
+    padding: 8px 10px !important;
+    white-space: nowrap;
+  }
+
+  .nav-tabs .nav-link.active {
+    color: var(--ru-green) !important;
+    border-bottom: 2px solid var(--ru-green) !important;
+    background: transparent !important;
+    font-weight: 600 !important;
+    margin-bottom: -2px;
+  }
+
+  /* --- Buttons --- */
+  .btn-primary {
+    background-color: var(--ru-green) !important;
+    border-color: var(--ru-green) !important;
+    border-radius: var(--ru-radius-sm) !important;
+  }
+
+  /* --- Bottom navigation bar --- */
+  .bottom-nav {
+    display: flex !important;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 64px;
+    background: var(--ru-surface);
+    border-top: 1px solid var(--ru-border);
+    z-index: 9999;
+    padding-bottom: env(safe-area-inset-bottom, 6px);
+    justify-content: space-around;
+    align-items: center;
+    box-shadow: 0 -2px 12px rgba(0,0,0,0.06);
+  }
+
+  .bottom-nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    color: var(--ru-muted);
+    text-decoration: none !important;
+    font-size: 0.65rem;
+    font-weight: 500;
+    flex: 1;
+    padding: 6px 8px;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .bottom-nav-item.active {
+    color: var(--ru-green) !important;
+  }
+
+  .bottom-nav-icon {
+    font-size: 1.3rem;
+    line-height: 1;
+  }
+
+  /* --- Table container --- */
+  .dash-spreadsheet-container {
+    border-radius: var(--ru-radius-sm) !important;
+    overflow: hidden !important;
+  }
+}

@@ -125,9 +125,10 @@ NAV_LINK_ACTIVE_STYLE = {
 app.layout = html.Div(
     children=[
 
-        # ── Permanent left sidebar ──────────────────────────────────────────
+        # ── Permanent left sidebar (hidden on mobile via CSS) ───────────────
         html.Div(
             style=SIDEBAR_STYLE,
+            className="sidebar-wrap",
             children=[
                 # Logo
                 html.Img(
@@ -152,10 +153,24 @@ app.layout = html.Div(
         # ── Main content area ───────────────────────────────────────────────
         html.Div(
             style=CONTENT_STYLE,
+            className="content-wrap",
             children=[
                 html.Div(id="page-expenses",    children=get_expenses_layout()),
-                html.Div(id="page-budget",      children=get_budget_layout(),        style=HIDE),
+                html.Div(id="page-budget",      children=get_budget_layout(),      style=HIDE),
                 html.Div(id="page-investments", children=get_investments_layout(), style=HIDE),
+            ],
+        ),
+
+        # ── Bottom navigation (mobile only, shown via CSS) ───────────────────
+        html.Div(
+            className="bottom-nav",
+            children=[
+                html.A([html.Span("💳", className="bottom-nav-icon"), html.Span("Expenses")],
+                       id="bnav-expenses", href="#", className="bottom-nav-item active"),
+                html.A([html.Span("🎯", className="bottom-nav-icon"), html.Span("Budget")],
+                       id="bnav-budget", href="#", className="bottom-nav-item"),
+                html.A([html.Span("📈", className="bottom-nav-icon"), html.Span("Invest")],
+                       id="bnav-investments", href="#", className="bottom-nav-item"),
             ],
         ),
     ]
@@ -169,20 +184,36 @@ app.layout = html.Div(
     Output("nav-expenses",     "style"),
     Output("nav-budget",       "style"),
     Output("nav-investments",  "style"),
+    Output("bnav-expenses",    "className"),
+    Output("bnav-budget",      "className"),
+    Output("bnav-investments", "className"),
     Input("nav-expenses",    "n_clicks"),
     Input("nav-budget",      "n_clicks"),
     Input("nav-investments", "n_clicks"),
+    Input("bnav-expenses",   "n_clicks"),
+    Input("bnav-budget",     "n_clicks"),
+    Input("bnav-investments","n_clicks"),
     prevent_initial_call=True,
 )
-def _switch_page(n_exp, n_bud, n_inv):
-    """Switch the visible page and highlight the active nav link."""
+def _switch_page(n_exp, n_bud, n_inv, bn_exp, bn_bud, bn_inv):
+    """Switch the visible page and highlight the active nav link on sidebar and bottom bar."""
     triggered = ctx.triggered_id
 
-    if triggered == "nav-budget":
-        return HIDE, SHOW, HIDE, NAV_LINK_STYLE, NAV_LINK_ACTIVE_STYLE, NAV_LINK_STYLE
-    if triggered == "nav-investments":
-        return HIDE, HIDE, SHOW, NAV_LINK_STYLE, NAV_LINK_STYLE, NAV_LINK_ACTIVE_STYLE
-    return SHOW, HIDE, HIDE, NAV_LINK_ACTIVE_STYLE, NAV_LINK_STYLE, NAV_LINK_STYLE
+    if triggered in ("nav-budget", "bnav-budget"):
+        pages = (HIDE, SHOW, HIDE)
+        sidebar = (NAV_LINK_STYLE, NAV_LINK_ACTIVE_STYLE, NAV_LINK_STYLE)
+        active = 1
+    elif triggered in ("nav-investments", "bnav-investments"):
+        pages = (HIDE, HIDE, SHOW)
+        sidebar = (NAV_LINK_STYLE, NAV_LINK_STYLE, NAV_LINK_ACTIVE_STYLE)
+        active = 2
+    else:
+        pages = (SHOW, HIDE, HIDE)
+        sidebar = (NAV_LINK_ACTIVE_STYLE, NAV_LINK_STYLE, NAV_LINK_STYLE)
+        active = 0
+
+    bnav = ["bottom-nav-item active" if i == active else "bottom-nav-item" for i in range(3)]
+    return (*pages, *sidebar, *bnav)
 
 
 register_expenses_callbacks(app)
