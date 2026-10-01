@@ -1,0 +1,14 @@
+name: Generate AI Insights
+
+on:
+  schedule:
+    - cron: '0 9 */3 * *'  # Every 3 days at 09:00 UTC
+  workflow_dispatch:        # Allow manual trigger from GitHub UI
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger AI insights generation
+        run: |
+          curl -X POST "https://michaelketash.pythonanywhere.com/api/insights/generate?token=${{ secrets.CRON_SECRET }}"
