@@ -123,7 +123,7 @@ def _calc_surplus(year: int, month: int) -> tuple[float, float, float]:
     df_budgets  = fetch_all_budgets()
     total_budget = float(df_budgets['monthly_target'].sum()) if not df_budgets.empty else 0.0
 
-    df_expenses  = fetch_raw_expenses(year, month, split='')
+    df_expenses  = fetch_raw_expenses(year, month, split='shared')
     total_actual = float(df_expenses['amount'].sum()) if not df_expenses.empty else 0.0
 
     surplus = max(0.0, total_budget - total_actual)

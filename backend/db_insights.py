@@ -36,7 +36,7 @@ def get_ai_context_data() -> dict:
             conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
 
-            cursor.execute('SELECT category, monthly_target FROM budgets')
+            cursor.execute("SELECT category, monthly_target FROM budgets WHERE payer = 'shared'")
             budgets = {row['category']: row['monthly_target'] for row in cursor.fetchall()}
 
             cursor.execute('''

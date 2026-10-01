@@ -1,3 +1,4 @@
+
 """
 telegram_bot.py
 ===============
@@ -10,6 +11,7 @@ the confirmed expense to the database.
 """
 
 import os
+import uuid
 from telebot import types
 from ai_parser import parser_service
 from database_manager import add_expense
@@ -18,13 +20,15 @@ from bff_routes import invalidate_cache
 PAYER_1 = os.getenv('PAYER_1', 'Michael')
 PAYER_2 = os.getenv('PAYER_2', 'Ori')
 
+_pending: dict = {}
+
 
 def send_transaction_ui(bot, chat_id: str | int, merchant: str, amount: float,
                         category: str, payer: str) -> None:
     """Send an inline keyboard message asking the user to choose a split type.
 
-    Encodes transaction data into the callback payload using ``|`` as a delimiter.
-    Fields are sanitized and truncated to stay within Telegram's 64-byte callback limit.
+    Stores full transaction data in the module-level ``_pending`` dict and encodes
+    only a short unique ID in the callback payload to stay within Telegram's 64-byte limit.
 
     :param bot: The ``telebot.TeleBot`` instance to send the message with.
     :param chat_id: Telegram chat ID to send the message to.
@@ -35,16 +39,18 @@ def send_transaction_ui(bot, chat_id: str | int, merchant: str, amount: float,
     """
     markup = types.InlineKeyboardMarkup(row_width=2)
 
-    # Sanitize fields to prevent delimiter collisions and cap length for callback byte limit
-    m_safe = str(merchant).replace('|', '').strip()[:10]
-    p_safe = str(payer).replace('|', '').strip()[:10]
-    a_safe = str(amount)
-    c_safe = str(category).replace('|', '').strip()
+    # Store full transaction data server-side — put only a short ID in the callback
+    # to avoid Telegram's 64-byte callback data limit and preserve full merchant names
+    txn_id = uuid.uuid4().hex[:8]
+    _pending[txn_id] = {
+        'merchant': str(merchant).strip(),
+        'amount': float(amount),
+        'category': str(category).strip(),
+        'payer': str(payer).strip(),
+    }
 
-    cb_shared = f"shrd|{m_safe}|{a_safe}|{c_safe}|{p_safe}"
-    cb_priv = f"priv|{m_safe}|{a_safe}|{c_safe}|{p_safe}"
-
-    print(f"[DEBUG] Callback Length: {len(cb_shared.encode('utf-8'))} bytes")
+    cb_shared = f"shrd|{txn_id}"
+    cb_priv   = f"priv|{txn_id}"
 
     markup.add(
         types.InlineKeyboardButton("Shared 🏠", callback_data=cb_shared),
@@ -112,13 +118,22 @@ def register_handlers(bot) -> None:
             print(f"[DEBUG] Button Pressed! Raw Data received: {call.data}")
 
             data_parts = call.data.split('|')
-            print(f"[DEBUG] Split parts: {data_parts} (Count: {len(data_parts)})")
 
-            if len(data_parts) < 5:
-                print(f"[ERROR] Callback data is incomplete or corrupted: {call.data}")
+            if len(data_parts) != 2:
+                print(f"[ERROR] Unexpected callback format: {call.data}")
                 return
 
-            action, merchant, amount, category, original_payer = data_parts
+            action, txn_id = data_parts
+            txn = _pending.pop(txn_id, None)
+
+            if not txn:
+                bot.answer_callback_query(call.id, "This button has expired. Please re-send the transaction.")
+                return
+
+            merchant       = txn['merchant']
+            amount         = txn['amount']
+            category       = txn['category']
+            original_payer = txn['payer']
             db_split = "shared" if action == "shrd" else "personal"
 
             print(f"[DEBUG] Attempting to save: {merchant}, {amount}, {original_payer}, {db_split}")

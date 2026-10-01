@@ -290,11 +290,16 @@ def api_renew_gmail_watch():
     topic_name = f"projects/{project_id}/topics/gmail-notifications"
     watch_request = {'labelIds': ['INBOX'], 'topicName': topic_name}
 
+    import httplib2
+    from google.auth.transport import httplib2 as google_auth_httplib2
+
     results = {}
     for user in [os.getenv('PAYER_1', 'Michael').lower(), os.getenv('PAYER_2', 'Ori').lower()]:
         try:
             creds = Credentials.from_authorized_user_file(f'token_{user}.json', ['https://www.googleapis.com/auth/gmail.readonly'])
-            service = build('gmail', 'v1', credentials=creds)
+            _proxy = httplib2.ProxyInfo(httplib2.socks.PROXY_TYPE_HTTP, 'proxy.server', 3128)
+            _http = google_auth_httplib2.AuthorizedHttp(creds, http=httplib2.Http(proxy_info=_proxy))
+            service = build('gmail', 'v1', http=_http)
             response = service.users().watch(userId='me', body=watch_request).execute()
             results[user] = {"status": "ok", "expiration": response.get('expiration')}
         except Exception as e:

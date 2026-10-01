@@ -11,8 +11,11 @@ downstream AI parsing.
 
 import base64
 import os
+import httplib2
 import pdfplumber
+import requests as req_lib
 from google.auth.transport.requests import Request
+from google.auth.transport import httplib2 as google_auth_httplib2
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 
@@ -31,7 +34,9 @@ class GmailProcessor:
         """
         self.username = username
         self.creds = self._load_credentials()
-        self.service = build('gmail', 'v1', credentials=self.creds)
+        _proxy = httplib2.ProxyInfo(httplib2.socks.PROXY_TYPE_HTTP, 'proxy.server', 3128)
+        _http = google_auth_httplib2.AuthorizedHttp(self.creds, http=httplib2.Http(proxy_info=_proxy))
+        self.service = build('gmail', 'v1', http=_http)
 
         # Hebrew and English keywords that indicate a financial email
         self.finance_keywords = [
@@ -56,7 +61,9 @@ class GmailProcessor:
 
         creds = Credentials.from_authorized_user_file(token_filename, SCOPES)
         if not creds.valid and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
+            _session = req_lib.Session()
+            _session.proxies = {'https': 'http://proxy.server:3128'}
+            creds.refresh(Request(session=_session))
             with open(token_filename, 'w') as f:
                 f.write(creds.to_json())
         return creds
@@ -161,9 +168,10 @@ class GmailProcessor:
         2. Skips it if the subject does not match financial keywords.
         3. Extracts the plain text body and all PDF attachments.
         4. Combines body and PDF text into a single delimited string per attachment.
+        5. Falls back to the body alone if no PDFs are found (e.g. Wolt, Apple receipts).
 
         :returns: A list of dicts, each with ``msg_id``, ``filename``, and ``text``
-                  (combined email body + PDF content). Returns ``[]`` if no
+                  (combined email body + PDF content, or body only). Returns ``[]`` if no
                   financial content is found.
         """
         message_meta = self._get_latest_message_meta()
@@ -199,5 +207,14 @@ class GmailProcessor:
                         "filename": result["filename"],
                         "text": combined_context
                     })
+
+        # Fallback: if no PDFs were found but the body has content, parse the body directly.
+        # Handles plain-text receipts (Wolt, Apple, Netflix, etc.) that have no attachments.
+        if not extracted_results and email_body.strip():
+            extracted_results.append({
+                "msg_id": msg_id,
+                "filename": None,
+                "text": f"--- EMAIL BODY START ---\n{email_body}\n--- EMAIL BODY END ---"
+            })
 
         return extracted_results

@@ -22,7 +22,7 @@ from flask_cors import CORS
 from telebot import types
 from dotenv import load_dotenv
 from ai_parser import parser_service
-from database_manager import setup_database
+from database_manager import setup_database, is_email_processed, mark_email_processed
 from telegram_bot import send_transaction_ui, register_handlers
 from api_routes import api
 from bff_routes import bff
@@ -45,7 +45,6 @@ CORS(app)
 app.register_blueprint(api, url_prefix='/api')
 app.register_blueprint(bff, url_prefix='/api/bff')
 setup_database()
-processed_emails = set()
 register_handlers(bot)
 
 
@@ -103,11 +102,10 @@ def handle_gmail_push():
 
         for item in pdf_results:
             msg_id = item.get('msg_id')
-            if msg_id in processed_emails: continue
+            if is_email_processed(msg_id): continue
 
             if process_text_and_notify(item['text'], payer=user_name.capitalize()):
-                # Track processed message IDs to avoid duplicate notifications
-                processed_emails.add(msg_id)
+                mark_email_processed(msg_id)
                 break
 
         return "OK", 200
@@ -123,6 +121,10 @@ def handle_card_app_alert():
     Expects a JSON body with ``merchant``, ``amount``, and ``payer`` fields.
     Passes the data through the AI parser for consistent naming and categorization.
     """
+    secret = os.getenv('WEBHOOK_SECRET')
+    if secret and request.headers.get('X-Webhook-Secret') != secret:
+        return jsonify({"status": "unauthorized"}), 401
+
     data = request.json
     if not data:
         return jsonify({"status": "error"}), 400

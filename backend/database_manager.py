@@ -146,6 +146,12 @@ def setup_database() -> bool:
                                         )
                                     ''')
 
+    cursor.execute('''CREATE TABLE IF NOT EXISTS processed_emails (
+                                        msg_id TEXT PRIMARY KEY,
+                                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                                        )
+                                    ''')
+
     # Migration: add payer column to investments and pot_transactions if not present.
     # Safe to run every startup — the except silently skips if already exists.
     for table in ('investments', 'pot_transactions'):
@@ -156,6 +162,39 @@ def setup_database() -> bool:
 
     connection.commit()
     return True
+
+def is_email_processed(msg_id: str) -> bool:
+    """Return True if this Gmail message ID has already been processed.
+
+    :param msg_id: Gmail message ID to check.
+    :returns: ``True`` if found in the ``processed_emails`` table, ``False`` otherwise.
+    """
+    try:
+        with sqlite3.connect('finance_bot.db') as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT 1 FROM processed_emails WHERE msg_id = ?', (msg_id,))
+            return cursor.fetchone() is not None
+    except sqlite3.Error:
+        return False
+
+
+def mark_email_processed(msg_id: str) -> None:
+    """Record a Gmail message ID as processed so it is never handled twice.
+
+    Uses INSERT OR IGNORE so duplicate calls are safe.
+
+    :param msg_id: Gmail message ID to persist.
+    """
+    try:
+        with sqlite3.connect('finance_bot.db') as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                'INSERT OR IGNORE INTO processed_emails (msg_id) VALUES (?)', (msg_id,)
+            )
+            conn.commit()
+    except sqlite3.Error as e:
+        print(f"❌ Database Error in mark_email_processed: {e}")
+
 
 if __name__ == '__main__':
     setup_database()
