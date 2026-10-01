@@ -225,6 +225,39 @@ def cleanup_pending_txns(cursor=None) -> None:
             print(f"❌ Database Error in cleanup_pending_txns: {e}")
 
 
+def save_ai_insight(text: str, insight_type: str) -> int | None:
+    """Persist a generated AI insight to the ``ai_insights`` table.
+
+    :param text: The insight text produced by the AI.
+    :param insight_type: One of ``'alert'``, ``'summary'``, or ``'praise'``.
+    :returns: The row ID of the newly inserted row, or ``None`` on failure.
+    """
+    try:
+        with sqlite3.connect('finance_bot.db') as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "INSERT INTO ai_insights (insight, type, isread) VALUES (?, ?, ?)",
+                (text, insight_type, False)
+            )
+            conn.commit()
+            return cursor.lastrowid
+    except sqlite3.Error as e:
+        print(f"❌ Database Error in save_ai_insight: {e}")
+        return None
+
+
+def mark_insight_read(insight_id: int) -> None:
+    """Mark an AI insight as read in the database.
+
+    :param insight_id: Primary key of the insight to update.
+    """
+    try:
+        with sqlite3.connect('finance_bot.db') as conn:
+            conn.execute("UPDATE ai_insights SET isread = 1 WHERE id = ?", (insight_id,))
+    except sqlite3.Error as e:
+        print(f"❌ Database Error in mark_insight_read: {e}")
+
+
 def save_pending_txn(txn_id: str, merchant: str, amount: float, category: str, payer: str) -> None:
     """Persist a pending transaction to the database so it survives app restarts.
 

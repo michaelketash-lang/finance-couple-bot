@@ -13,8 +13,7 @@ import json
 import logging
 from openai import OpenAI
 from dotenv import load_dotenv
-from database_manager import get_ai_context_data
-import sqlite3
+from database_manager import get_ai_context_data, save_ai_insight, mark_insight_read
 import datetime
 import sys
 
@@ -94,46 +93,13 @@ class FinancialInsightsAgent:
 
             logger.info(f"💡 AI Insight ({insight_type}): {insight_text}")
 
-            insight_id = self._save_to_database(insight_text, insight_type)
+            insight_id = save_ai_insight(insight_text, insight_type)
 
             if insight_id:
                 self.send_to_telegram(insight_id, insight_text, insight_type)
 
         except Exception as e:
             logger.error(f"Post-processing failed: {e}")
-
-    def _save_to_database(self, text: str, insight_type: str) -> int | None:
-        """Persist a generated insight to the ``ai_insights`` table.
-
-        :param text: The insight text produced by the AI.
-        :param insight_type: One of ``'alert'``, ``'summary'``, or ``'praise'``.
-        :returns: The ``rowid`` of the newly inserted row, or ``None`` on failure.
-        """
-        try:
-            with sqlite3.connect('finance_bot.db') as conn:
-                cursor = conn.cursor()
-                sql = "INSERT INTO ai_insights (insight, type, isread) VALUES (?, ?, ?)"
-                cursor.execute(sql, (text, insight_type, False))
-                conn.commit()
-            logger.info("✅ Insight saved to finance_bot.db")
-            return cursor.lastrowid
-        except sqlite3.Error as e:
-            logger.error(f"❌ Database error: {e}")
-            return None
-
-    def _mark_as_read(self, insight_id: int) -> None:
-        """Mark an insight as read in the database.
-
-        :param insight_id: Primary key of the insight to update.
-        """
-        try:
-            with sqlite3.connect('finance_bot.db') as conn:
-                cursor = conn.cursor()
-                cursor.execute("UPDATE ai_insights SET isread = 1 WHERE id = ?", (insight_id,))
-                conn.commit()
-            logger.info(f"✅ Insight #{insight_id} marked as read in database.")
-        except sqlite3.Error as e:
-            logger.error(f"❌ Failed to mark insight as read: {e}")
 
     def send_to_telegram(self, insight_id: int, insight_text: str, insight_type: str) -> None:
         """Send a formatted insight message to the configured Telegram chat.
@@ -168,10 +134,11 @@ class FinancialInsightsAgent:
         }
 
         try:
-            response = requests.post(url, data=payload)
+            proxies = {'https': 'http://proxy.server:3128'}
+            response = requests.post(url, data=payload, proxies=proxies)
             if response.status_code == 200:
                 logger.info("🚀 Insight sent to Telegram!")
-                self._mark_as_read(insight_id)
+                mark_insight_read(insight_id)
             else:
                 logger.error(f"Telegram failed: {response.text}")
         except Exception as e:
