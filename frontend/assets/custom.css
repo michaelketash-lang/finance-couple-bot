@@ -7,6 +7,10 @@
 /* Bottom nav is hidden on desktop by default */
 .bottom-nav { display: none; }
 
+/* Utility: shown only on mobile / only on desktop */
+.mobile-only  { display: none !important; }
+.desktop-only { display: block !important; }
+
 @media (max-width: 768px) {
 
   /* --- Design tokens --- */
@@ -32,6 +36,10 @@
     font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif !important;
     color: var(--ru-text) !important;
   }
+
+  /* --- Utility classes --- */
+  .mobile-only  { display: block !important; }
+  .desktop-only { display: none !important; }
 
   /* --- Hide desktop sidebar --- */
   .sidebar-wrap {

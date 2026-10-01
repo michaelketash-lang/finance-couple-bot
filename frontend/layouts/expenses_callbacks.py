@@ -25,9 +25,11 @@ from dash import Dash, Input, Output, State, html, no_update
 from components.charts import category_pie_chart, monthly_trends_bar_chart
 from api_client import (
     fetch_dashboard_data,
+    fetch_budget_bff,
     update_expense,
     export_to_sheets,
 )
+from components.cards import budget_progress_card
 from layouts.expenses_layout import _Ids
 
 PAYER_1 = os.getenv('PAYER_1', 'Michael')
@@ -58,7 +60,9 @@ def register_expenses_callbacks(app: Dash) -> None:
         """Fetch all dashboard data and write it to the store."""
         if not selected_year or not active_month_str:
             return {}
-        return fetch_dashboard_data(selected_year, int(active_month_str))
+        data = fetch_dashboard_data(selected_year, int(active_month_str))
+        data['budget_data'] = fetch_budget_bff(selected_year, int(active_month_str))
+        return data
 
     # =========================================================================
     # SLAVE CALLBACK 1 — TABLE
@@ -290,6 +294,44 @@ def register_expenses_callbacks(app: Dash) -> None:
             cards.append(card)
 
         return html.Div(cards, className="d-flex flex-wrap")
+
+    # =========================================================================
+    # MOBILE SYNC — keeps mobile month dropdown in sync with desktop tabs.
+    # =========================================================================
+
+    @app.callback(
+        Output(ids.month_tabs, "active_tab"),
+        Input(ids.mobile_month_dropdown, "value"),
+        prevent_initial_call=True,
+    )
+    def _sync_mobile_month(month_value: str):
+        return month_value
+
+    # =========================================================================
+    # MOBILE CATEGORY VIEW — renders category spend vs budget progress cards.
+    # =========================================================================
+
+    @app.callback(
+        Output(ids.mobile_category_view, "children"),
+        Input(ids.dashboard_store, "data"),
+    )
+    def _render_mobile_category_view(store: dict):
+        if not store:
+            return []
+
+        budget_data = store.get('budget_data', {})
+        budgets = {b['category']: float(b['monthly_target'])
+                   for b in budget_data.get('budgets', [])}
+        actuals = {k: float(v) for k, v in budget_data.get('category_actuals', {}).items()}
+
+        if not budgets:
+            return html.Div("No budget data.", className="text-muted p-3")
+
+        return dbc.Row(
+            [dbc.Col(budget_progress_card(cat, actuals.get(cat, 0.0), target),
+                     xs=12, className="mb-3")
+             for cat, target in budgets.items()],
+        )
 
     # =========================================================================
     # INLINE EDIT — fires only on table cell edits, calls API once.

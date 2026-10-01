@@ -55,6 +55,9 @@ class _Ids:
     payer_summary_div: str = "expenses-payer-summary"
     # BFF master store — holds all fetched data for the selected month
     dashboard_store: str = "expenses-dashboard-store"
+    # Mobile-only components
+    mobile_month_dropdown: str = "expenses-mobile-month-dropdown"
+    mobile_category_view: str = "expenses-mobile-category-view"
 
 
 def _create_kpi_card(title: str, id: str, color: str) -> dbc.Card:
@@ -121,6 +124,21 @@ def get_expenses_layout() -> dbc.Container:
             dcc.Store(id=ids.ids_store, data=[], storage_type="memory"),
             dcc.Store(id=ids.reference_store, data=[], storage_type="memory"),
 
+            # --- ROW 0 (MOBILE ONLY): Month dropdown ---
+            dbc.Row(
+                dbc.Col(
+                    dcc.Dropdown(
+                        id=ids.mobile_month_dropdown,
+                        options=[{"label": calendar.month_name[m], "value": str(m)}
+                                 for m in range(1, 13)],
+                        value=current_month,
+                        clearable=False,
+                    ),
+                    xs=12,
+                ),
+                className="mb-3 mobile-only",
+            ),
+
             # --- ROW 1: 12 MONTHS TABS + YEAR DROPDOWN + SHEETS EXPORT ICON ---
             dbc.Row(
                 [
@@ -162,7 +180,7 @@ def get_expenses_layout() -> dbc.Container:
                         xs=12,
                     )
                 ],
-                className="mb-4",
+                className="mb-4 desktop-only",
             ),
 
             # --- ROW 3: KPI CARDS ---
@@ -178,6 +196,15 @@ def get_expenses_layout() -> dbc.Container:
                                              "secondary"), md=4, xs=12),
                 ],
                 className="mb-4",
+            ),
+
+            # --- ROW 3.5 (MOBILE ONLY): Category progress cards ---
+            dbc.Row(
+                dbc.Col(
+                    html.Div(id=ids.mobile_category_view),
+                    xs=12,
+                ),
+                className="mb-4 mobile-only",
             ),
 
             # --- ROW 4: CHARTS ---
@@ -201,7 +228,7 @@ def get_expenses_layout() -> dbc.Container:
                 className="mb-4",
             ),
 
-            # --- ROW 5: TRANSACTIONS TABLE & PAYER SUMMARY ---
+            # --- ROW 5: TRANSACTIONS TABLE & PAYER SUMMARY (desktop only) ---
             dbc.Row(
                 [
                     dbc.Col(
@@ -248,7 +275,8 @@ def get_expenses_layout() -> dbc.Container:
                         ),
                         xs=12
                     )
-                ]
+                ],
+                className="desktop-only",
             ),
         ],
     )
