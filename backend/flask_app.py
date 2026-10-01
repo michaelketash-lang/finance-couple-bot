@@ -106,7 +106,6 @@ def handle_gmail_push():
 
             if process_text_and_notify(item['text'], payer=user_name.capitalize()):
                 mark_email_processed(msg_id)
-                break
 
         return "OK", 200
     except Exception as e:

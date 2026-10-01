@@ -68,15 +68,14 @@ class GmailProcessor:
                 f.write(creds.to_json())
         return creds
 
-    def _get_latest_message_meta(self) -> dict | None:
-        """Fetch the metadata of the most recent message in the inbox.
+    def _get_recent_message_metas(self, count: int = 5) -> list[dict]:
+        """Fetch metadata for the most recent messages in the inbox.
 
-        :returns: A message metadata dict with at least an ``id`` key,
-                  or ``None`` if the inbox is empty.
+        :param count: Number of recent messages to fetch (default 5).
+        :returns: List of message metadata dicts, each with at least an ``id`` key.
         """
-        results = self.service.users().messages().list(userId='me', maxResults=1).execute()
-        messages = results.get('messages', [])
-        return messages[0] if messages else None
+        results = self.service.users().messages().list(userId='me', maxResults=count).execute()
+        return results.get('messages', [])
 
     def _extract_email_body(self, payload: dict) -> str:
         """Recursively extract the plain text body from an email payload.
@@ -161,60 +160,58 @@ class GmailProcessor:
 
         return {"filename": filename, "text": content}
 
-    def get_latest_email_pdf_content(self) -> list[dict]:
-        """Fetch, filter, and extract content from the latest email.
+    def _extract_single_email(self, msg_id: str) -> list[dict]:
+        """Fetch and extract content from a single email by ID.
 
-        1. Retrieves the most recent inbox message.
-        2. Skips it if the subject does not match financial keywords.
-        3. Extracts the plain text body and all PDF attachments.
-        4. Combines body and PDF text into a single delimited string per attachment.
-        5. Falls back to the body alone if no PDFs are found (e.g. Wolt, Apple receipts).
-
-        :returns: A list of dicts, each with ``msg_id``, ``filename``, and ``text``
-                  (combined email body + PDF content, or body only). Returns ``[]`` if no
-                  financial content is found.
+        :param msg_id: Gmail message ID to process.
+        :returns: List of dicts with ``msg_id``, ``filename``, and ``text``, or ``[]``
+                  if the email is not financial or has no extractable content.
         """
-        message_meta = self._get_latest_message_meta()
-        if not message_meta:
-            return []
-
-        msg_id = message_meta['id']
         message = self.service.users().messages().get(userId='me', id=msg_id).execute()
         payload = message.get('payload', {})
 
-        # Layer 1 Filter: skip non-financial emails before downloading attachments
         if not self._is_financial_subject(payload):
             return []
 
         email_body = self._extract_email_body(payload)
-
         parts = payload.get('parts', [])
-        extracted_results = []
+        results = []
 
         for part in parts:
             if part.get('filename') and part.get('filename').lower().endswith('.pdf'):
                 result = self._download_and_parse_attachment(msg_id, part)
-
                 if result["text"]:
-                    # Delimiters help the AI distinguish email context from invoice data
                     combined_context = (
                         f"--- EMAIL BODY START ---\n{email_body}\n--- EMAIL BODY END ---\n\n"
                         f"--- PDF CONTENT START ---\n{result['text']}\n--- PDF CONTENT END ---"
                     )
-
-                    extracted_results.append({
+                    results.append({
                         "msg_id": msg_id,
                         "filename": result["filename"],
                         "text": combined_context
                     })
 
-        # Fallback: if no PDFs were found but the body has content, parse the body directly.
-        # Handles plain-text receipts (Wolt, Apple, Netflix, etc.) that have no attachments.
-        if not extracted_results and email_body.strip():
-            extracted_results.append({
+        # Fallback: plain-text receipts with no PDF attachments (Wolt, Apple, Netflix, etc.)
+        if not results and email_body.strip():
+            results.append({
                 "msg_id": msg_id,
                 "filename": None,
                 "text": f"--- EMAIL BODY START ---\n{email_body}\n--- EMAIL BODY END ---"
             })
 
+        return results
+
+    def get_latest_email_pdf_content(self) -> list[dict]:
+        """Fetch, filter, and extract content from the 5 most recent emails.
+
+        Iterates over the last 5 inbox messages so that receipts arriving
+        close together between two Pub/Sub pushes are not missed.
+
+        :returns: A flat list of dicts, each with ``msg_id``, ``filename``, and ``text``.
+                  Returns ``[]`` if no financial content is found.
+        """
+        metas = self._get_recent_message_metas(count=5)
+        extracted_results = []
+        for meta in metas:
+            extracted_results.extend(self._extract_single_email(meta['id']))
         return extracted_results
