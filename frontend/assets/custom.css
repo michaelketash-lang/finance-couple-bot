@@ -178,4 +178,30 @@
     border-radius: var(--ru-radius-sm) !important;
     overflow: hidden !important;
   }
+
+  /* --- Budget table: hide Actual and Remaining columns on mobile --- */
+  td[data-dash-column="actual"],
+  th[data-dash-column="actual"],
+  td[data-dash-column="remaining"],
+  th[data-dash-column="remaining"] {
+    display: none !important;
+  }
+
+  /* --- Budget top controls: stack vertically on mobile --- */
+  .budget-controls-bar {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 12px !important;
+    padding: 16px !important;
+  }
+
+  /* Hide the vertical divider inside budget controls */
+  .budget-controls-bar > div[style*="width: 1px"] {
+    display: none !important;
+  }
+
+  /* Budget radio items: wrap neatly */
+  .budget-controls-bar .form-check-inline {
+    margin-right: 10px !important;
+  }
 }

@@ -121,7 +121,7 @@ def get_budget_layout() -> dbc.Container:
                                 labelClassName="me-4 fw-medium",
                             ),
                         ],
-                        className="d-flex align-items-center bg-white p-3 rounded shadow-sm",
+                        className="d-flex align-items-center bg-white p-3 rounded shadow-sm budget-controls-bar",
                     ),
                     xs=12,
                 ),
@@ -242,6 +242,7 @@ def get_budget_layout() -> dbc.Container:
                     ),
                     xs=12,
                 ),
+                className="desktop-only",
             ),
 
         ],

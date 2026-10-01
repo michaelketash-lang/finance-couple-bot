@@ -57,6 +57,7 @@ class _Ids:
     dashboard_store: str = "expenses-dashboard-store"
     # Mobile-only components
     mobile_month_dropdown: str = "expenses-mobile-month-dropdown"
+    mobile_split_radio: str = "expenses-mobile-split-radio"
     mobile_category_view: str = "expenses-mobile-category-view"
 
 
@@ -198,6 +199,25 @@ def get_expenses_layout() -> dbc.Container:
                 className="mb-4",
             ),
 
+            # --- ROW 3.4 (MOBILE ONLY): Split selector ---
+            dbc.Row(
+                dbc.Col(
+                    dbc.RadioItems(
+                        id=ids.mobile_split_radio,
+                        options=[
+                            {"label": "Shared",  "value": "shared"},
+                            {"label": PAYER_1,   "value": PAYER_1.lower()},
+                            {"label": PAYER_2,   "value": PAYER_2.lower()},
+                        ],
+                        value=default_split,
+                        inline=True,
+                        className="fw-medium",
+                    ),
+                    xs=12,
+                ),
+                className="mb-3 mobile-only",
+            ),
+
             # --- ROW 3.5 (MOBILE ONLY): Category progress cards ---
             dbc.Row(
                 dbc.Col(
@@ -223,6 +243,7 @@ def get_expenses_layout() -> dbc.Container:
                             className="bg-white p-3 rounded shadow-sm h-100",
                         ),
                         md=6, xs=12,
+                        className="desktop-only",
                     ),
                 ],
                 className="mb-4",

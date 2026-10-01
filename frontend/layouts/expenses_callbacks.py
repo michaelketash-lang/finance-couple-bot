@@ -307,6 +307,14 @@ def register_expenses_callbacks(app: Dash) -> None:
     def _sync_mobile_month(month_value: str):
         return month_value
 
+    @app.callback(
+        Output(ids.split_radio, "value"),
+        Input(ids.mobile_split_radio, "value"),
+        prevent_initial_call=True,
+    )
+    def _sync_mobile_split(value: str):
+        return value
+
     # =========================================================================
     # MOBILE CATEGORY VIEW — renders category spend vs budget progress cards.
     # =========================================================================
