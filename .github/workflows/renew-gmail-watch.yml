@@ -1,0 +1,14 @@
+name: Renew Gmail Watch
+
+on:
+  schedule:
+    - cron: '0 8 */6 * *'  # Every 6 days at 08:00 UTC
+  workflow_dispatch:        # Allow manual trigger from GitHub UI
+
+jobs:
+  renew:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Renew Gmail watch for both users
+        run: |
+          curl -X POST "https://michaelketash.pythonanywhere.com/api/gmail/renew-watch?token=${{ secrets.CRON_SECRET }}"
