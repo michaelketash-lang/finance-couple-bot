@@ -15,7 +15,7 @@ import httplib2
 import pdfplumber
 import requests as req_lib
 from google.auth.transport.requests import Request
-from google.auth.transport import httplib2 as google_auth_httplib2
+import google_auth_httplib2
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 

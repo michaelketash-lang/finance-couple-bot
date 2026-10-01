@@ -291,7 +291,7 @@ def api_renew_gmail_watch():
     watch_request = {'labelIds': ['INBOX'], 'topicName': topic_name}
 
     import httplib2
-    from google.auth.transport import httplib2 as google_auth_httplib2
+    import google_auth_httplib2
 
     results = {}
     for user in [os.getenv('PAYER_1', 'Michael').lower(), os.getenv('PAYER_2', 'Ori').lower()]:
