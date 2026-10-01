@@ -35,8 +35,55 @@ app = Dash(
     __name__,
     external_stylesheets=[dbc.themes.LUX],
     suppress_callback_exceptions=False,
+    meta_tags=[
+        {"name": "viewport", "content": "width=device-width, initial-scale=1"},
+    ],
 )
 server = app.server  # Gunicorn/Render compatibility.
+
+# Serve the service worker from the root path (required for PWA scope)
+from flask import Response
+
+@server.route('/sw.js')
+def service_worker():
+    sw = """
+self.addEventListener('install', e => e.waitUntil(self.skipWaiting()));
+self.addEventListener('activate', e => e.waitUntil(self.clients.claim()));
+"""
+    return Response(sw, mimetype='application/javascript')
+
+app.index_string = '''
+<!DOCTYPE html>
+<html>
+    <head>
+        {%metas%}
+        <title>Finance Bot</title>
+        {%favicon%}
+        {%css%}
+        <link rel="manifest" href="/assets/manifest.json">
+        <meta name="theme-color" content="#1a2e3b">
+        <meta name="apple-mobile-web-app-capable" content="yes">
+        <meta name="apple-mobile-web-app-status-bar-style" content="default">
+        <meta name="apple-mobile-web-app-title" content="Finance">
+        <link rel="apple-touch-icon" href="/assets/logo.png">
+        <script>
+            if ("serviceWorker" in navigator) {
+                window.addEventListener("load", function() {
+                    navigator.serviceWorker.register("/sw.js");
+                });
+            }
+        </script>
+    </head>
+    <body>
+        {%app_entry%}
+        <footer>
+            {%config%}
+            {%scripts%}
+            {%renderer%}
+        </footer>
+    </body>
+</html>
+'''
 
 # ── Sidebar styles ──────────────────────────────────────────────────────────
 SIDEBAR_STYLE = {
