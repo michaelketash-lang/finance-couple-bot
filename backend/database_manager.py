@@ -16,6 +16,7 @@ Tables managed:
 """
 
 import sqlite3
+import datetime
 
 from db_expenses import (
     add_expense,
@@ -170,6 +171,7 @@ def setup_database() -> bool:
         except sqlite3.OperationalError:
             pass  # Column already exists
 
+    cleanup_pending_txns(cursor=cursor)
     connection.commit()
     return True
 
@@ -206,6 +208,23 @@ def mark_email_processed(msg_id: str) -> None:
         print(f"❌ Database Error in mark_email_processed: {e}")
 
 
+def cleanup_pending_txns(cursor=None) -> None:
+    """Delete pending transactions older than 24 hours.
+
+    Accepts an optional open cursor (used during ``setup_database``).
+    If no cursor is provided, opens its own connection.
+    """
+    cutoff = (datetime.datetime.now() - datetime.timedelta(hours=24)).strftime('%Y-%m-%d %H:%M:%S')
+    if cursor:
+        cursor.execute('DELETE FROM pending_transactions WHERE created_at < ?', (cutoff,))
+    else:
+        try:
+            with sqlite3.connect('finance_bot.db') as conn:
+                conn.execute('DELETE FROM pending_transactions WHERE created_at < ?', (cutoff,))
+        except sqlite3.Error as e:
+            print(f"❌ Database Error in cleanup_pending_txns: {e}")
+
+
 def save_pending_txn(txn_id: str, merchant: str, amount: float, category: str, payer: str) -> None:
     """Persist a pending transaction to the database so it survives app restarts.
 
@@ -230,9 +249,10 @@ def load_pending_txn(txn_id: str) -> dict | None:
     try:
         with sqlite3.connect('finance_bot.db') as conn:
             conn.row_factory = sqlite3.Row
+            cutoff = (datetime.datetime.now() - datetime.timedelta(hours=24)).strftime('%Y-%m-%d %H:%M:%S')
             row = conn.execute(
-                'SELECT merchant, amount, category, payer FROM pending_transactions WHERE txn_id = ?',
-                (txn_id,)
+                'SELECT merchant, amount, category, payer FROM pending_transactions WHERE txn_id = ? AND created_at >= ?',
+                (txn_id, cutoff)
             ).fetchone()
             return dict(row) if row else None
     except sqlite3.Error as e:

@@ -12,6 +12,7 @@ the confirmed expense to the database.
 
 import os
 import uuid
+import datetime
 from telebot import types
 from ai_parser import parser_service
 from database_manager import add_expense, save_pending_txn, load_pending_txn, delete_pending_txn
@@ -39,6 +40,12 @@ def send_transaction_ui(bot, chat_id: str | int, merchant: str, amount: float,
     """
     markup = types.InlineKeyboardMarkup(row_width=2)
 
+    # Purge in-memory entries older than 24 hours (lazy cleanup)
+    cutoff = datetime.datetime.now() - datetime.timedelta(hours=24)
+    stale = [k for k, v in _pending.items() if v.get('created_at', datetime.datetime.now()) < cutoff]
+    for k in stale:
+        _pending.pop(k, None)
+
     # Store full transaction data server-side — put only a short ID in the callback
     # to avoid Telegram's 64-byte callback data limit and preserve full merchant names
     txn_id = uuid.uuid4().hex[:8]
@@ -47,6 +54,7 @@ def send_transaction_ui(bot, chat_id: str | int, merchant: str, amount: float,
         'amount': float(amount),
         'category': str(category).strip(),
         'payer': str(payer).strip(),
+        'created_at': datetime.datetime.now(),
     }
     _pending[txn_id] = txn_data
     save_pending_txn(txn_id, txn_data['merchant'], txn_data['amount'], txn_data['category'], txn_data['payer'])
