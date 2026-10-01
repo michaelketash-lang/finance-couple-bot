@@ -133,7 +133,10 @@ def handle_card_app_alert():
     amount = data.get('amount', '0.0')
     payer = data.get('payer', 'Card_User')
 
-    process_text_and_notify(f"{raw_merchant} {amount}", payer=payer)
+    try:
+        process_text_and_notify(f"{raw_merchant} {amount}", payer=payer)
+    except Exception as e:
+        print(f"[WEBHOOK ERROR] Telegram failed for {raw_merchant} ₪{amount} ({payer}): {e}")
 
     return jsonify({"status": "success"}), 200
 
