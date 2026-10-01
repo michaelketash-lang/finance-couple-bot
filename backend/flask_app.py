@@ -140,6 +140,12 @@ def handle_card_app_alert():
     return jsonify({"status": "success"}), 200
 
 
+@app.route('/health', methods=['GET'])
+def health_check():
+    """Simple liveness probe for uptime monitoring services."""
+    return jsonify({"status": "ok"}), 200
+
+
 @app.route('/telegram', methods=['POST'])
 def handle_telegram_updates():
     """Receive and dispatch a Telegram bot update.
