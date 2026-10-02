@@ -223,6 +223,29 @@ def get_personal_monthly_totals(year: int, month: int) -> dict:
         return {}
 
 
+def _calculate_settlement(payments: dict) -> dict:
+    """Pure settlement calculation — no database, no I/O.
+
+    :param payments: ``{payer_name: total_shared_amount_paid}`` for all payers.
+    :returns: ``{"balanced": True, "amount": 0.0}`` or
+              ``{"debtor": str, "creditor": str, "amount": float}``.
+    """
+    if not payments:
+        return {"balanced": True, "amount": 0.0}
+
+    total_shared = sum(payments.values())
+    fair_share = total_shared / 2.0
+    balances = {person: round(paid - fair_share, 2) for person, paid in payments.items()}
+    debtor = min(balances, key=balances.get)
+    creditor = max(balances, key=balances.get)
+    amount = round(abs(balances[debtor]), 2)
+
+    if amount == 0.0:
+        return {"balanced": True, "amount": 0.0}
+
+    return {"debtor": debtor, "creditor": creditor, "amount": amount}
+
+
 def get_monthly_settlement(year: int, month: int) -> dict:
     """Calculate who owes whom based on shared expense payments for a given month.
 
@@ -254,18 +277,7 @@ def get_monthly_settlement(year: int, month: int) -> dict:
             if not any(k.lower() == p.lower() for k in payments):
                 payments[p] = 0.0
 
-        total_shared = sum(payments.values())
-        fair_share = total_shared / 2.0
-        # Positive balance = overpaid (creditor), negative = underpaid (debtor)
-        balances = {person: round(paid - fair_share, 2) for person, paid in payments.items()}
-        debtor = min(balances, key=balances.get)
-        creditor = max(balances, key=balances.get)
-        amount = round(abs(balances[debtor]), 2)
-
-        if amount == 0.0:
-            return {"balanced": True, "amount": 0.0}
-
-        return {"debtor": debtor, "creditor": creditor, "amount": amount}
+        return _calculate_settlement(payments)
     except sqlite3.Error as e:
         print(f"❌ Database Error in get_monthly_settlement: {e}")
         return {}

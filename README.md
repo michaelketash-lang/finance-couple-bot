@@ -2,7 +2,7 @@
 
 > A full-stack personal finance tracker for two — powered by Telegram, GPT-4o, Gmail, and a live web dashboard.
 
-![CI](https://img.shields.io/badge/build-passing-brightgreen) ![Python](https://img.shields.io/badge/python-3.13-blue) ![License](https://img.shields.io/badge/license-MIT-green)
+![Gmail Watch](https://github.com/michaelketash-lang/finance-couple-bot/actions/workflows/renew-gmail-watch.yml/badge.svg) ![AI Insights](https://github.com/michaelketash-lang/finance-couple-bot/actions/workflows/generate-insights.yml/badge.svg) ![Python](https://img.shields.io/badge/python-3.13-blue)
 
 ## What It Does
 
@@ -48,6 +48,26 @@ Gmail / Card App / Telegram
 | Dashboard | Dash + Plotly |
 | Export | Google Sheets API + gspread |
 | Deployment | PythonAnywhere (backend) + Render (frontend) |
+
+## Design Decisions
+
+**SQLite over Postgres** — two users, effectively one writer at a time, and zero infrastructure to operate or pay for. The cost: SQLite locks the whole file on writes, so it wouldn't survive real concurrency, and the database lives on the server's disk, meaning a stateless redeploy would wipe it.
+
+**GPT-4o for parsing, GPT-4o-mini for insights** — a parsing error writes a wrong amount into the database and silently corrupts the monthly settlement, so accuracy is worth the higher cost there. Insights are advisory text delivered every 3 days; if they're slightly less precise, nothing breaks. The cheaper model is the right choice for that job.
+
+**Human confirmation before saving** — the model classifies each transaction as shared or personal, and that field directly determines who owes whom. Rather than trust the classification silently, a single Telegram inline-keyboard tap lets the user confirm or correct it before anything is written to the database. This eliminates an entire category of silent financial error.
+
+**Flask over Django** — the backend is ~10 API routes with no ORM, no admin panel, and no user auth system. Django's defaults solve problems this project doesn't have. Flask is the right size.
+
+**PythonAnywhere (backend) + Render (frontend) split** — PythonAnywhere routes all outbound traffic through a proxy, which is required for Gmail API calls from their servers. Render hosts the Dash dashboard, which has no such constraint. The cost: two platforms to configure and keep in sync.
+
+**GitHub Actions for scheduled tasks** — PythonAnywhere's free tier has no cron jobs. GitHub Actions provides free scheduled runs for the Gmail watch renewal (every 6 days) and AI insights delivery (every 3 days). The cost: if GitHub Actions is delayed or down, those jobs miss their window silently.
+
+**Known limitations**
+- No deduplication between the card webhook and a Gmail receipt for the same purchase — both sources can write the same transaction
+- No retry if the OpenAI API call fails mid-processing; the expense is silently dropped
+- Amounts stored as floats, not decimals — rounding edge cases are possible in settlement calculations
+- No automated tests on the Gmail parsing path; changes there are verified manually
 
 ## Screenshots
 
