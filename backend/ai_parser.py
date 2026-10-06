@@ -33,11 +33,18 @@ class ExpenseAIParser:
                             "Maintenance", "Shopping", "Health", "Leisure", "Other"]
     DEFAULT_CURRENCY = "ILS"
 
+    # The SDK retries every failure, including ones that can never succeed on a
+    # retry (an exhausted credit balance returns 429 just like a rate limit).
+    # Three attempts of that added ~2.5s of dead time per email. One retry still
+    # covers a genuine transient blip; anything worse is handled at the email
+    # level by MAX_EMAIL_ATTEMPTS across separate Pub/Sub pushes.
+    MAX_API_RETRIES = 1
+
     def __init__(self) -> None:
         """Initialize the parser and validate the OpenAI API key."""
         load_dotenv()
         self.api_key = self._get_api_key()
-        self.client = OpenAI(api_key=self.api_key)
+        self.client = OpenAI(api_key=self.api_key, max_retries=self.MAX_API_RETRIES)
 
     def _get_api_key(self) -> str:
         """Retrieve the OpenAI API key from environment variables.
