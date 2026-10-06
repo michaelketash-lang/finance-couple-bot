@@ -20,7 +20,13 @@ def expenses_datatable(
 ):
     """Build an editable DataTable for displaying and correcting monthly expenses.
 
-    Columns: Date (read-only) | Merchant | Amount | Category (dropdown) | Payer.
+    Columns: Date (read-only) | Merchant | Amount | Your Share (read-only) |
+    Category (dropdown) | Payer.
+
+    ``amount`` is always the true transaction value and is what an inline edit
+    writes back. ``share`` is derived for display only — half of a shared
+    expense, all of a personal one — and is never persisted.
+
     Supports zebra striping, hover highlight, and category dropdown editing.
 
     :param data: List of expense row dicts to populate the table.
@@ -63,6 +69,13 @@ def expenses_datatable(
                 "id": "amount",
                 "type": "numeric",
                 "editable": True,
+                "format": amount_format,
+            },
+            {
+                "name": "Your Share",
+                "id": "share",
+                "type": "numeric",
+                "editable": False,
                 "format": amount_format,
             },
             {

@@ -86,20 +86,24 @@ def register_expenses_callbacks(app: Dash) -> None:
         expenses = store.get("expenses", [])
 
         if split_value == "shared":
-            rows = [r for r in expenses if r.get("split") == "shared"]
+            rows = [dict(r) for r in expenses if r.get("split") == "shared"]
         else:
             personal_rows = [
-                r for r in expenses
+                dict(r) for r in expenses
                 if r.get("split") == "personal"
                 and r.get("payer", "").lower() == split_value.lower()
             ]
-            shared_rows = []
-            for r in expenses:
-                if r.get("split") == "shared":
-                    row_copy = dict(r)
-                    row_copy["amount"] = round(float(r.get("amount", 0)) / 2, 2)
-                    shared_rows.append(row_copy)
+            shared_rows = [dict(r) for r in expenses if r.get("split") == "shared"]
             rows = personal_rows + shared_rows
+
+        # "share" is a read-only display column: half of a shared expense, all of
+        # a personal one. `amount` deliberately keeps the true transaction value —
+        # the inline-edit callback writes `amount` straight back to the database,
+        # so halving it here would persist the halved figure and corrupt the
+        # settlement calculation.
+        for row in rows:
+            amount = float(row.get("amount") or 0)
+            row["share"] = round(amount / 2, 2) if row.get("split") == "shared" else round(amount, 2)
 
         row_ids = [r.get("id") for r in rows]
         return rows, row_ids, rows
