@@ -13,6 +13,7 @@ Tables managed:
     - ``budgets`` — monthly targets per expense category.
     - ``investments`` — investment holdings by asset class.
     - ``ai_insights`` — AI-generated financial insights with read status.
+    - ``processed_emails`` — Gmail message IDs with parse status and attempt count.
 """
 
 import sqlite3
@@ -52,6 +53,11 @@ from db_investments import (
     delete_investment,
 )
 from db_insights import get_ai_context_data
+
+# How many times a single Gmail message may be sent to the AI before we give up
+# on it. Without a cap, a persistent AI outage means every inbound Pub/Sub push
+# re-parses the same messages forever.
+MAX_EMAIL_ATTEMPTS = 3
 
 
 def setup_database() -> bool:
@@ -149,9 +155,25 @@ def setup_database() -> bool:
 
     cursor.execute('''CREATE TABLE IF NOT EXISTS processed_emails (
                                         msg_id TEXT PRIMARY KEY,
+                                        status TEXT DEFAULT 'pending',
+                                        attempts INTEGER DEFAULT 0,
                                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                                         )
                                     ''')
+
+    # Migration: add attempt tracking to processed_emails.
+    # Under the old schema a row simply existing meant "parsed successfully",
+    # so every pre-existing row is backfilled to 'done'. The UPDATE only runs
+    # on the first startup after this change, because the ALTER then fails.
+    try:
+        cursor.execute("ALTER TABLE processed_emails ADD COLUMN status TEXT DEFAULT 'pending'")
+        cursor.execute("UPDATE processed_emails SET status = 'done'")
+    except sqlite3.OperationalError:
+        pass  # Column already exists
+    try:
+        cursor.execute("ALTER TABLE processed_emails ADD COLUMN attempts INTEGER DEFAULT 0")
+    except sqlite3.OperationalError:
+        pass  # Column already exists
 
     cursor.execute('''CREATE TABLE IF NOT EXISTS pending_transactions (
                                         txn_id TEXT PRIMARY KEY,
@@ -176,24 +198,66 @@ def setup_database() -> bool:
     return True
 
 def is_email_processed(msg_id: str) -> bool:
-    """Return True if this Gmail message ID has already been processed.
+    """Return True if this Gmail message needs no further handling.
+
+    A message is finished either because it was parsed (``status='done'``) or
+    because it failed ``MAX_EMAIL_ATTEMPTS`` times and we have given up on it.
+    Both cases must return ``True``, otherwise the caller re-parses the same
+    message on every Pub/Sub push.
 
     :param msg_id: Gmail message ID to check.
-    :returns: ``True`` if found in the ``processed_emails`` table, ``False`` otherwise.
+    :returns: ``True`` if the message is done or exhausted, ``False`` otherwise.
     """
     try:
         with sqlite3.connect('finance_bot.db') as conn:
             cursor = conn.cursor()
-            cursor.execute('SELECT 1 FROM processed_emails WHERE msg_id = ?', (msg_id,))
-            return cursor.fetchone() is not None
+            cursor.execute(
+                'SELECT status, attempts FROM processed_emails WHERE msg_id = ?', (msg_id,)
+            )
+            row = cursor.fetchone()
+            if row is None:
+                return False
+            status, attempts = row[0], row[1] or 0
+            return status == 'done' or attempts >= MAX_EMAIL_ATTEMPTS
     except sqlite3.Error:
         return False
 
 
-def mark_email_processed(msg_id: str) -> None:
-    """Record a Gmail message ID as processed so it is never handled twice.
+def record_email_attempt(msg_id: str) -> int:
+    """Increment and return the parse attempt count for a Gmail message.
 
-    Uses INSERT OR IGNORE so duplicate calls are safe.
+    Called immediately before handing the message to the AI, so the count is
+    recorded even if the parse crashes or the request is cut short.
+
+    :param msg_id: Gmail message ID being attempted.
+    :returns: The attempt count after incrementing, or ``0`` on database error.
+    """
+    try:
+        with sqlite3.connect('finance_bot.db') as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "INSERT OR IGNORE INTO processed_emails (msg_id, status, attempts) "
+                "VALUES (?, 'pending', 0)",
+                (msg_id,)
+            )
+            cursor.execute(
+                'UPDATE processed_emails SET attempts = attempts + 1 WHERE msg_id = ?',
+                (msg_id,)
+            )
+            cursor.execute('SELECT attempts FROM processed_emails WHERE msg_id = ?', (msg_id,))
+            row = cursor.fetchone()
+            conn.commit()
+            return int(row[0]) if row else 1
+    except sqlite3.Error as e:
+        print(f"❌ Database Error in record_email_attempt: {e}")
+        return 0
+
+
+def mark_email_processed(msg_id: str) -> None:
+    """Mark a Gmail message as finished so it is never handled twice.
+
+    Called for both outcomes that need no retry: an expense was logged, or the
+    AI answered confidently that this is not an expense.
 
     :param msg_id: Gmail message ID to persist.
     """
@@ -201,7 +265,12 @@ def mark_email_processed(msg_id: str) -> None:
         with sqlite3.connect('finance_bot.db') as conn:
             cursor = conn.cursor()
             cursor.execute(
-                'INSERT OR IGNORE INTO processed_emails (msg_id) VALUES (?)', (msg_id,)
+                "INSERT OR IGNORE INTO processed_emails (msg_id, status, attempts) "
+                "VALUES (?, 'done', 0)",
+                (msg_id,)
+            )
+            cursor.execute(
+                "UPDATE processed_emails SET status = 'done' WHERE msg_id = ?", (msg_id,)
             )
             conn.commit()
     except sqlite3.Error as e:

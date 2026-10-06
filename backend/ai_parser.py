@@ -133,37 +133,45 @@ class ExpenseAIParser:
     def _sanitize_response(self, raw_json: Optional[str]) -> Dict[str, Any]:
         """Parse the AI's JSON output and apply safe defaults for missing or invalid fields.
 
+        The ``error`` key distinguishes "the AI said this is not an expense" from
+        "the AI never answered". Both yield ``is_expense=False``, but only the
+        latter is worth retrying — callers must check ``error`` before trusting
+        ``is_expense``.
+
         :param raw_json: Raw JSON string returned by the model, or ``None`` on failure.
         :returns: A dict with guaranteed keys: ``is_expense``, ``merchant``,
-                  ``amount``, ``category``, ``currency``.
+                  ``amount``, ``category``, ``currency``, ``error``.
         """
         defaults = {
             "is_expense": False,
             "merchant": "Unknown",
             "amount": 0.0,
             "category": "Other",
-            "currency": self.DEFAULT_CURRENCY
+            "currency": self.DEFAULT_CURRENCY,
+            "error": False
         }
 
         if not raw_json:
-            return defaults
+            # The API call itself failed — this is not a verdict on the text.
+            return {**defaults, "error": True}
 
         try:
             parsed = json.loads(raw_json)
             parsed["amount"] = self._clean_amount_value(parsed.get("amount"))
             parsed["is_expense"] = bool(parsed.get("is_expense", False))
             # Merge with defaults so all keys are always present
-            return {**defaults, **parsed}
+            return {**defaults, **parsed, "error": False}
         except json.JSONDecodeError:
             logger.warning("AI returned invalid JSON. Using fallback defaults.")
-            return defaults
+            return {**defaults, "error": True}
 
     def parse(self, input_text: str) -> Dict[str, Any]:
         """Extract structured expense data from raw input text.
 
         :param input_text: Raw text from an email, PDF, or direct user message.
         :returns: A dict with keys ``is_expense``, ``merchant``, ``amount``,
-                  ``category``, and ``currency``.
+                  ``category``, ``currency``, and ``error``. When ``error`` is
+                  ``True`` the AI call failed and the other fields are meaningless.
         """
         logger.info(f"Parsing input (Length: {len(input_text)})")
         raw_output = self._fetch_completion(input_text)

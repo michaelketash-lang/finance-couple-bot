@@ -22,7 +22,13 @@ from flask_cors import CORS
 from telebot import types
 from dotenv import load_dotenv
 from ai_parser import parser_service
-from database_manager import setup_database, is_email_processed, mark_email_processed
+from database_manager import (
+    setup_database,
+    is_email_processed,
+    mark_email_processed,
+    record_email_attempt,
+    MAX_EMAIL_ATTEMPTS,
+)
 from telegram_bot import send_transaction_ui, register_handlers
 from api_routes import api
 from bff_routes import bff
@@ -48,18 +54,24 @@ setup_database()
 register_handlers(bot)
 
 
-def process_text_and_notify(raw_text: str, payer: str, chat_id: str = MY_CHAT_ID) -> bool:
+def process_text_and_notify(raw_text: str, payer: str, chat_id: str = MY_CHAT_ID) -> str:
     """Parse raw text with the AI and send a Telegram confirmation UI if an expense is detected.
 
     :param raw_text: Raw text from an email, PDF, or card alert to classify.
     :param payer: Name of the person who made the transaction.
     :param chat_id: Telegram chat ID to send the UI to (defaults to ``MY_CHAT_ID``).
-    :returns: ``True`` if an expense was detected and the UI was sent, ``False`` otherwise.
+    :returns: ``'logged'`` if an expense was detected and the UI was sent,
+              ``'not_expense'`` if the AI judged this to be no transaction, or
+              ``'error'`` if the AI call failed. Only ``'error'`` is worth retrying.
     """
     enriched = parser_service.parse(raw_text)
 
+    # An AI failure is not a verdict — never treat it as "not an expense".
+    if enriched.get('error', False):
+        return 'error'
+
     if not enriched.get('is_expense', False):
-        return False
+        return 'not_expense'
 
     send_transaction_ui(
         bot=bot,
@@ -69,7 +81,7 @@ def process_text_and_notify(raw_text: str, payer: str, chat_id: str = MY_CHAT_ID
         category=enriched['category'],
         payer=payer
     )
-    return True
+    return 'logged'
 
 
 @app.route('/gmail-webhook', methods=['POST'])
@@ -104,8 +116,25 @@ def handle_gmail_push():
             msg_id = item.get('msg_id')
             if is_email_processed(msg_id): continue
 
-            if process_text_and_notify(item['text'], payer=user_name.capitalize()):
+            # Record the attempt before parsing, so a crash mid-parse still counts.
+            attempts = record_email_attempt(msg_id)
+            status = process_text_and_notify(item['text'], payer=user_name.capitalize())
+
+            if status in ('logged', 'not_expense'):
+                # Finished either way — marking both outcomes is what stops this
+                # message being re-sent to the AI on every subsequent push.
                 mark_email_processed(msg_id)
+            elif attempts >= MAX_EMAIL_ATTEMPTS:
+                # Out of retries. is_email_processed() now skips this message, so
+                # warn the user rather than let a real receipt disappear silently.
+                try:
+                    bot.send_message(
+                        MY_CHAT_ID,
+                        f"⚠️ Couldn't parse a receipt in {user_name.capitalize()}'s inbox "
+                        f"after {attempts} tries. Please add it manually with /add."
+                    )
+                except Exception as notify_error:
+                    print(f"Failed to send give-up notice: {notify_error}")
 
         return "OK", 200
     except Exception as e:
